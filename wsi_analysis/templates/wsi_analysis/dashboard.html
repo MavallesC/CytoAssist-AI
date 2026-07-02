@@ -1,0 +1,183 @@
+{% extends 'wsi_analysis/base.html' %}
+
+{% block title %}Panel Principal{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Panel de Control Citológico</h2>
+        <p>Monitoreo de láminas digitales WSI y diagnósticos asistidos.</p>
+    </div>
+    <a href="{% url 'upload_sample' %}" class="btn-primary">
+        <i class="fa-solid fa-plus"></i> Nueva Muestra
+    </a>
+</div>
+
+<!-- Estadísticas Resumidas -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-label"><i class="fa-solid fa-folder-open"></i> Total Muestras</span>
+        <span class="stat-value">{{ runs_data|length }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label"><i class="fa-solid fa-rotate"></i> En Proceso</span>
+        <span class="stat-value" style="color: #0ea5e9;" id="stat-running">
+            {{ running_count }}
+        </span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label"><i class="fa-solid fa-circle-check"></i> Completados</span>
+        <span class="stat-value" style="color: var(--negative);" id="stat-completed">
+            {{ completed_count }}
+        </span>
+    </div>
+</div>
+
+<!-- Lista de Muestras -->
+<div class="card">
+    <div class="card-title">
+        <i class="fa-solid fa-list-check" style="color: var(--accent);"></i>
+        Portaobjetos Digitalizados
+    </div>
+    
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Nombre de Muestra</th>
+                    <th>Ruta de Archivo WSI</th>
+                    <th>Fecha de Carga</th>
+                    <th>Corrida Activa</th>
+                    <th>Estado de Análisis</th>
+                    <th>Diagnóstico Preliminar IA</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if runs_data %}
+                    {% for item in runs_data %}
+                        <tr id="sample-row-{{ item.sample.id }}">
+                            <td><strong>{{ item.sample.name }}</strong></td>
+                            <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                <code style="font-size: 12px; color: var(--text-secondary);">{{ item.sample.file_path }}</code>
+                            </td>
+                            <td>{{ item.sample.uploaded_at|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                {% if item.last_run %}
+                                    <code>{{ item.last_run.run_id }}</code>
+                                {% else %}
+                                    <span style="color: var(--text-muted);">Sin corridas</span>
+                                {% endif %}
+                            </td>
+                            <td class="status-cell" data-run-id="{{ item.last_run.run_id }}">
+                                {% if item.last_run %}
+                                    {% if item.last_run.status == 'PENDING' %}
+                                        <span class="badge badge-pending"><i class="fa-solid fa-clock"></i> Pendiente</span>
+                                    {% elif item.last_run.status == 'RUNNING' %}
+                                        <span class="badge badge-running"><i class="fa-solid fa-spinner fa-spin"></i> Procesando</span>
+                                    {% elif item.last_run.status == 'COMPLETED' %}
+                                        <span class="badge badge-completed"><i class="fa-solid fa-circle-check"></i> Completado</span>
+                                    {% else %}
+                                        <span class="badge badge-failed"><i class="fa-solid fa-circle-xmark"></i> Fallido</span>
+                                    {% endif %}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="result-cell">
+                                {% if item.last_run and item.last_run.status == 'COMPLETED' %}
+                                    {% with res=item.last_run.results_json.preliminary_result %}
+                                        <span class="badge 
+                                            {% if res.is_critical %}badge-failed
+                                            {% elif 'negativas' in res.type.lower %}badge-completed
+                                            {% else %}badge-warning{% endif %}">
+                                            {{ res.class }}
+                                        </span>
+                                    {% endwith %}
+                                {% elif item.last_run and item.last_run.status == 'FAILED' %}
+                                    <span style="color: var(--asch); font-size: 12px; font-weight: bold;"><i class="fa-solid fa-triangle-exclamation"></i> Error de Análisis</span>
+                                {% else %}
+                                    <span style="color: var(--text-muted); font-style: italic;">Esperando resultados...</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div style="display: flex; gap: 8px;">
+                                    {% if item.last_run and item.last_run.status == 'COMPLETED' %}
+                                        <a href="{% url 'run_detail' item.last_run.run_id %}" class="btn-secondary" style="padding: 6px 12px; font-size: 12px;">
+                                            <i class="fa-solid fa-magnifying-glass-chart"></i> Reporte
+                                        </a>
+                                        <a href="{% url 'run_viewer' item.last_run.run_id %}" class="btn-primary" style="padding: 6px 12px; font-size: 12px; color: #0b0f19;">
+                                            <i class="fa-solid fa-eye"></i> Visor WSI
+                                        </a>
+                                    {% elif item.last_run and item.last_run.status == 'FAILED' %}
+                                        <a href="{% url 'run_detail' item.last_run.run_id %}" class="btn-secondary" style="padding: 6px 12px; font-size: 12px; border-color: var(--asch); color: var(--asch);">
+                                            <i class="fa-solid fa-bug"></i> Ver Error
+                                        </a>
+                                    {% endif %}
+                                    <a href="{% url 'delete_sample' item.sample.id %}" class="btn-secondary" style="padding: 6px 12px; font-size: 12px; border-color: rgba(244,63,94,0.3); color: var(--asch);" onclick="return confirm('¿Está seguro de que desea eliminar la muestra {{ item.sample.name }} y todos sus archivos asociados?')">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                            <i class="fa-solid fa-microscope" style="font-size: 32px; margin-bottom: 15px; display: block; color: var(--text-muted);"></i>
+                            No hay muestras registradas en el sistema. Presione el botón "Nueva Muestra" para cargar una lámina.
+                        </td>
+                    </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const runningBadges = document.querySelectorAll(".status-cell[data-run-id]");
+        
+        let statRunning = 0;
+        let statCompleted = 0;
+
+        runningBadges.forEach(cell => {
+            const runId = cell.getAttribute("data-run-id");
+            const badge = cell.querySelector(".badge");
+            
+            if (badge) {
+                if (badge.classList.contains("badge-running") || badge.classList.contains("badge-pending")) {
+                    statRunning++;
+                    // Iniciar el monitoreo por polling AJAX cada 3 segundos
+                    pollRunStatus(runId, cell);
+                } else if (badge.classList.contains("badge-completed")) {
+                    statCompleted++;
+                }
+            }
+        });
+
+        document.getElementById("stat-running").innerText = statRunning;
+        document.getElementById("stat-completed").innerText = statCompleted;
+
+        function pollRunStatus(runId, cellElement) {
+            const interval = setInterval(() => {
+                fetch(`/api/runs/${runId}/status/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.completed) {
+                            clearInterval(interval);
+                            // Recargar la página una vez se complete o falle para actualizar toda la tabla
+                            window.location.reload();
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Error polling run status:", err);
+                    });
+            }, 3000);
+        }
+    });
+</script>
+{% endblock %}

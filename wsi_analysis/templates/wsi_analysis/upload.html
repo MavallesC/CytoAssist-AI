@@ -1,0 +1,152 @@
+{% extends 'wsi_analysis/base.html' %}
+
+{% block title %}Cargar Muestra WSI{% endblock %}
+{% block nav_upload %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Cargar Lámina Digital WSI</h2>
+        <p>Suba un archivo WSI o elija una ruta local y configure los parámetros de escaneo citológico.</p>
+    </div>
+    <a href="{% url 'dashboard' %}" class="btn-secondary">
+        <i class="fa-solid fa-arrow-left-long"></i> Volver al Panel
+    </a>
+</div>
+
+<form method="POST" enctype="multipart/form-data">
+    {% csrf_token %}
+    
+    <div class="grid-2">
+        <!-- Tarjeta de Muestra -->
+        <div class="card" style="height: fit-content;">
+            <div class="card-title">
+                <i class="fa-solid fa-file-medical" style="color: var(--accent);"></i>
+                Origen de la Muestra
+            </div>
+            
+            <div class="form-group">
+                <label for="{{ sample_form.name.id_for_label }}">{{ sample_form.name.label }}</label>
+                {{ sample_form.name }}
+                {% if sample_form.name.errors %}
+                    <div style="color: var(--asch); font-size: 12px; margin-top: 5px;">{{ sample_form.name.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="{{ sample_form.file_path.id_for_label }}">{{ sample_form.file_path.label }}</label>
+                {{ sample_form.file_path }}
+                <div class="form-help">{{ sample_form.file_path.help_text }}</div>
+                {% if sample_form.file_path.errors %}
+                    <div style="color: var(--asch); font-size: 12px; margin-top: 5px;">{{ sample_form.file_path.errors }}</div>
+                {% endif %}
+            </div>
+
+            <div style="text-align: center; margin: 25px 0; color: var(--text-secondary); position: relative;">
+                <span style="background-color: var(--bg-secondary); padding: 0 15px; position: relative; z-index: 2;">O SUBIR ARCHIVO</span>
+                <hr style="position: absolute; top: 50%; left: 0; width: 100%; border: none; border-top: 1px solid var(--border-color); z-index: 1;">
+            </div>
+
+            <div class="form-group">
+                <label for="{{ sample_form.uploaded_file.id_for_label }}">{{ sample_form.uploaded_file.label }}</label>
+                {{ sample_form.uploaded_file }}
+                <div class="form-help">{{ sample_form.uploaded_file.help_text }}</div>
+                {% if sample_form.uploaded_file.errors %}
+                    <div style="color: var(--asch); font-size: 12px; margin-top: 5px;">{{ sample_form.uploaded_file.errors }}</div>
+                {% endif %}
+            </div>
+            
+            <div style="background-color: rgba(0, 210, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--border-glow); font-size: 13px; color: var(--text-secondary); line-height: 1.4; margin-top: 30px;">
+                <i class="fa-solid fa-circle-nodes" style="color: var(--accent); margin-right: 5px;"></i>
+                <strong>Consejo:</strong> Para láminas WSI pesadas (ej. 600MB .tiff o .svs), es preferible dejarlas en el disco local del servidor e indicar la ruta absoluta en la caja superior.
+            </div>
+        </div>
+
+        <!-- Tarjeta de Parámetros -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fa-solid fa-sliders" style="color: var(--accent);"></i>
+                Parámetros del Pipeline de Análisis
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="{{ params_form.tile_size.id_for_label }}">{{ params_form.tile_size.label }}</label>
+                    {{ params_form.tile_size }}
+                    <div class="form-help">{{ params_form.tile_size.help_text }}</div>
+                </div>
+                <div class="form-group">
+                    <label for="{{ params_form.stride.id_for_label }}">{{ params_form.stride.label }}</label>
+                    {{ params_form.stride }}
+                    <div class="form-help">{{ params_form.stride.help_text }}</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="{{ params_form.crop_size.id_for_label }}">{{ params_form.crop_size.label }}</label>
+                    {{ params_form.crop_size }}
+                    <div class="form-help">{{ params_form.crop_size.help_text }}</div>
+                </div>
+                <div class="form-group">
+                    <label for="{{ params_form.min_clean_frac.id_for_label }}">{{ params_form.min_clean_frac.label }}</label>
+                    {{ params_form.min_clean_frac }}
+                    <div class="form-help">{{ params_form.min_clean_frac.help_text }}</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="{{ params_form.min_focus_score.id_for_label }}">{{ params_form.min_focus_score.label }}</label>
+                    {{ params_form.min_focus_score }}
+                    <div class="form-help">{{ params_form.min_focus_score.help_text }}</div>
+                </div>
+                <div class="form-group">
+                    <label for="{{ params_form.min_edge_density.id_for_label }}">{{ params_form.min_edge_density.label }}</label>
+                    {{ params_form.min_edge_density }}
+                    <div class="form-help">{{ params_form.min_edge_density.help_text }}</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="{{ params_form.min_cyto_frac.id_for_label }}">{{ params_form.min_cyto_frac.label }}</label>
+                    {{ params_form.min_cyto_frac }}
+                    <div class="form-help">{{ params_form.min_cyto_frac.help_text }}</div>
+                </div>
+                <div class="form-group">
+                    <label for="{{ params_form.min_conf_priority.id_for_label }}">{{ params_form.min_conf_priority.label }}</label>
+                    {{ params_form.min_conf_priority }}
+                    <div class="form-help">{{ params_form.min_conf_priority.help_text }}</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="{{ params_form.min_nucleus_area.id_for_label }}">{{ params_form.min_nucleus_area.label }}</label>
+                    {{ params_form.min_nucleus_area }}
+                    <div class="form-help">{{ params_form.min_nucleus_area.help_text }}</div>
+                </div>
+                <div class="form-group">
+                    <label for="{{ params_form.max_nucleus_area.id_for_label }}">{{ params_form.max_nucleus_area.label }}</label>
+                    {{ params_form.max_nucleus_area }}
+                    <div class="form-help">{{ params_form.max_nucleus_area.help_text }}</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="{{ params_form.max_cells_total.id_for_label }}">{{ params_form.max_cells_total.label }}</label>
+                {{ params_form.max_cells_total }}
+                <div class="form-help">{{ params_form.max_cells_total.help_text }}</div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 15px; margin-top: 30px;">
+                <button type="reset" class="btn-secondary">Restablecer</button>
+                <button type="submit" class="btn-primary">
+                    <i class="fa-solid fa-play"></i> Iniciar Análisis
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}

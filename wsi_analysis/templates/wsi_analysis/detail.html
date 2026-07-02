@@ -1,0 +1,215 @@
+{% extends 'wsi_analysis/base.html' %}
+{% load static %}
+{% load wsi_tags %}
+
+{% block title %}Corrida {{ run.run_id }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Corrida de Análisis #{{ run.run_id }}</h2>
+        <p>Muestra: <strong>{{ run.sample.name }}</strong> | Archivo: <code>{{ run.sample.file_path }}</code></p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+        <a href="{% url 'dashboard' %}" class="btn-secondary">
+            <i class="fa-solid fa-arrow-left-long"></i> Volver
+        </a>
+        <a href="{% url 'run_viewer' run.run_id %}" class="btn-primary" style="color: #0b0f19;">
+            <i class="fa-solid fa-eye"></i> Visor WSI
+        </a>
+    </div>
+</div>
+
+{% if run.status == 'RUNNING' %}
+    <!-- Cargador si está corriendo -->
+    <div class="card" style="text-align: center; padding: 50px;">
+        <i class="fa-solid fa-spinner fa-spin" style="font-size: 48px; color: var(--accent); margin-bottom: 20px;"></i>
+        <h3>Procesamiento en Curso...</h3>
+        <p style="color: var(--text-secondary); margin-top: 10px;">
+            El pipeline está escaneando los tiles de la imagen, detectando núcleos y corriendo las predicciones de IA.
+        </p>
+        <script>
+            setTimeout(() => { window.location.reload(); }, 4000);
+        </script>
+    </div>
+{% elif run.status == 'FAILED' %}
+    <!-- Mostrar error si falló -->
+    <div class="card" style="border-color: var(--asch);">
+        <div class="card-title" style="color: var(--asch);">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            Error durante la Corrida del Pipeline
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            El análisis falló. Revise los detalles técnicos del error a continuación:
+        </p>
+        <pre style="background-color: var(--bg-tertiary); padding: 20px; border-radius: 8px; font-family: monospace; font-size: 13px; color: #f43f5e; overflow-x: auto; white-space: pre-wrap;">{{ run.error_message }}</pre>
+    </div>
+{% else %}
+    <!-- Resultados completados -->
+    
+    <!-- Alerta de Diagnóstico Asistido IA -->
+    <div class="alert-result {% if prelim.is_critical %}critical{% elif 'negativas' in prelim.type.lower %}negative{% else %}warning{% endif %}">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+            <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 20px;">
+                <i class="fa-solid fa-circle-nodes"></i> {{ prelim.disclaimer }}
+            </h3>
+            <span class="badge {% if prelim.is_critical %}badge-failed{% elif 'negativas' in prelim.type.lower %}badge-completed{% else %}badge-warning{% endif %}" style="font-size: 13px;">
+                {{ prelim.class }}
+            </span>
+        </div>
+        <p style="font-size: 15px; line-height: 1.5;"><strong>Clasificación Preliminar:</strong> {{ prelim.reason }}</p>
+    </div>
+
+    <!-- Panel de descargas y acciones -->
+    <div class="card" style="padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap;">
+        <span style="color: var(--text-secondary); font-size: 14px;">
+            <i class="fa-solid fa-file-export"></i> Descargar Documentos del Análisis:
+        </span>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <a href="{% url 'download_report' run.run_id %}" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;">
+                <i class="fa-solid fa-file-pdf"></i> Reporte HTML (Imprimible)
+            </a>
+            <a href="{% url 'download_predictions' run.run_id %}" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;">
+                <i class="fa-solid fa-file-csv"></i> Tabla de Predicciones (CSV)
+            </a>
+            <a href="{% url 'download_json' run.run_id %}" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;">
+                <i class="fa-solid fa-file-code"></i> Metadatos Completos (JSON)
+            </a>
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <!-- Tabla por Clase -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fa-solid fa-pie-chart" style="color: var(--accent);"></i>
+                Distribución por Clase IA (Células evaluadas: {{ prelim.n_total_predicted_cells }})
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Clase Celular</th>
+                            <th>Células Detectadas</th>
+                            <th>Porcentaje</th>
+                            <th>Confianza Promedio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in class_summary %}
+                            <tr>
+                                <td><strong>{{ row.pred_label }}</strong></td>
+                                <td>{{ row.n_cells }}</td>
+                                <td>{{ row.percentage|floatformat:2 }}%</td>
+                                <td>{{ row.mean_confidence|stringformat:".2f" }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tabla Embudo de Calidad -->
+        <div class="card">
+            <div class="card-title">
+                <i class="fa-solid fa-filter" style="color: var(--accent);"></i>
+                Embudo de Retención y Calidad Celular
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Criterio de Calidad</th>
+                            <th>Candidatos Retenidos</th>
+                            <th>% sobre total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in retention_summary %}
+                            <tr>
+                                <td>{{ row.criterio }}</td>
+                                <td><strong>{{ row.n }}</strong></td>
+                                <td>{{ row.porcentaje_sobre_total_crops|floatformat:1 }}%</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Figuras de Control de Calidad (Thumbnail y Máscaras) -->
+    <div class="card">
+        <div class="card-title">
+            <i class="fa-solid fa-shield-halved" style="color: var(--accent);"></i>
+            Figuras de Control de Calidad WSI
+        </div>
+        
+        <div class="grid-2" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+            {% for fig in qc_figures %}
+                <div style="background-color: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; text-align: center;">
+                    <h5 style="margin-bottom: 10px; color: var(--text-secondary); text-transform: capitalize;">
+                        {{ fig.figure_type|replace_underscore:" " }}
+                    </h5>
+                    <a href="{{ MEDIA_URL }}{{ fig.image_path }}" target="_blank">
+                        <img src="{{ MEDIA_URL }}{{ fig.image_path }}" style="width: 100%; height: 200px; object-fit: contain; background: #000; border-radius: 4px;" alt="{{ fig.figure_type }}">
+                    </a>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Figuras de Distribución Espacial -->
+    <div class="card">
+        <div class="card-title">
+            <i class="fa-solid fa-map-location-dot" style="color: var(--accent);"></i>
+            Figuras Analíticas y Distribuciones Espaciales
+        </div>
+        
+        {% for fig in analytic_figures %}
+            <div class="figure-box" style="margin-bottom: 30px; text-align: center;">
+                <h4 style="margin-bottom: 12px; color: var(--accent);">
+                    {{ fig.figure_type|replace_underscore:" " }}
+                </h4>
+                <a href="{{ MEDIA_URL }}{{ fig.image_path }}" target="_blank">
+                    <img src="{{ MEDIA_URL }}{{ fig.image_path }}" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-color);" alt="{{ fig.figure_type }}">
+                </a>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- Top 10 ROIs prioritarias -->
+    <div class="card">
+        <div class="card-title">
+            <i class="fa-solid fa-table-cells-large" style="color: var(--accent);"></i>
+            Top 10 ROIs Prioritarias (Mayor Carga Lesional Anormal)
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID ROI</th>
+                        <th>Coordenadas WSI (X1, Y1, X2, Y2)</th>
+                        <th>Coordenadas Thumbnail</th>
+                        <th>Candidatos Predichos</th>
+                        <th style="color: var(--asch);">Células Anormales</th>
+                        <th>Score Prioridad Clínica</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in top_rois %}
+                        <tr>
+                            <td><code>{{ r.roi_id }}</code></td>
+                            <td>({{ r.x1_wsi }}, {{ r.y1_wsi }}) - ({{ r.x2_wsi }}, {{ r.y2_wsi }})</td>
+                            <td>({{ r.x1_thumb }}, {{ r.y1_thumb }}) - ({{ r.x2_thumb }}, {{ r.y2_thumb }})</td>
+                            <td>{{ r.n_candidates }}</td>
+                            <td style="color: var(--asch); font-weight: bold;">{{ r.n_abnormal }}</td>
+                            <td><span class="badge badge-failed" style="padding: 2px 6px;">{{ r.priority_score }}</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

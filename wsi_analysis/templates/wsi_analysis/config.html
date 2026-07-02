@@ -1,0 +1,156 @@
+{% extends 'wsi_analysis/base.html' %}
+
+{% block title %}Configuración de IA{% endblock %}
+{% block nav_config %}active{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Configuración de Modelos de Inteligencia Artificial</h2>
+        <p>Verifique la existencia y carga del clasificador CatBoost y Backbone extractor de características.</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-title">
+        <i class="fa-solid fa-square-check" style="color: var(--accent);"></i>
+        Estado de los Artefactos de Inferencia
+    </div>
+    
+    <div style="margin-bottom: 25px; font-size: 14px; color: var(--text-secondary);">
+        El backend busca el archivo de configuración <code>inference_artifacts.json</code> y los pesos de los modelos dentro del directorio del proyecto:
+        <br>
+        <code style="display: inline-block; background-color: var(--bg-tertiary); padding: 8px 12px; border-radius: 4px; color: var(--accent); margin-top: 10px; font-size: 13px;">{{ artefactos_dir }}</code>
+    </div>
+
+    <div class="table-container" style="margin-bottom: 25px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Componente / Archivo</th>
+                    <th>Estado de Carga</th>
+                    <th>Detalle</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>inference_artifacts.json</strong></td>
+                    <td>
+                        {% if status.json_exists %}
+                            <span class="badge badge-completed"><i class="fa-solid fa-circle-check"></i> Encontrado</span>
+                        {% else %}
+                            <span class="badge badge-failed"><i class="fa-solid fa-circle-xmark"></i> Ausente</span>
+                        {% endif %}
+                    </td>
+                    <td>Contiene el mapeo de etiquetas y nombres de archivos de pesos.</td>
+                </tr>
+                <tr>
+                    <td><strong>Backbone (DenseNet121.pt)</strong></td>
+                    <td>
+                        {% if status.backbone_exists %}
+                            <span class="badge badge-completed"><i class="fa-solid fa-circle-check"></i> Encontrado</span>
+                        {% else %}
+                            <span class="badge badge-failed"><i class="fa-solid fa-circle-xmark"></i> Ausente</span>
+                        {% endif %}
+                    </td>
+                    <td>Extractor de características de 1024 dimensiones.</td>
+                </tr>
+                <tr>
+                    <td><strong>CatBoost Classifier (.cbm)</strong></td>
+                    <td>
+                        {% if status.catboost_exists %}
+                            <span class="badge badge-completed"><i class="fa-solid fa-circle-check"></i> Encontrado</span>
+                        {% else %}
+                            <span class="badge badge-failed"><i class="fa-solid fa-circle-xmark"></i> Ausente</span>
+                        {% endif %}
+                    </td>
+                    <td>Clasificador final multiclasificación.</td>
+                </tr>
+                <tr>
+                    <td><strong>PCA (pca.joblib)</strong></td>
+                    <td>
+                        {% if status.pca_exists %}
+                            <span class="badge badge-completed"><i class="fa-solid fa-circle-check"></i> Encontrado</span>
+                        {% else %}
+                            <span class="badge badge-pending"><i class="fa-solid fa-info-circle"></i> Opcional</span>
+                        {% endif %}
+                    </td>
+                    <td>Reductor de dimensiones de características (opcional).</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Mensaje sobre modo de ejecución -->
+    {% if status.json_exists and status.backbone_exists and status.catboost_exists %}
+        <div style="background-color: rgba(16, 185, 129, 0.08); padding: 20px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.2); display: flex; align-items: center; gap: 15px;">
+            <i class="fa-solid fa-bolt" style="font-size: 28px; color: var(--negative);"></i>
+            <div>
+                <h4 style="color: #a7f3d0; font-family: 'Space Grotesk', sans-serif;">Sistema Operativo en Producción Local</h4>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">
+                    Todos los archivos de pesos se cargaron correctamente. Las predicciones sobre la celularidad WSI se realizarán utilizando los modelos entrenados en el backend PyTorch.
+                </p>
+            </div>
+        </div>
+    {% else %}
+        <div style="background-color: rgba(245, 158, 11, 0.08); padding: 20px; border-radius: 8px; border: 1px solid rgba(245, 158, 11, 0.2); display: flex; align-items: center; gap: 15px;">
+            <i class="fa-solid fa-triangle-exclamation" style="font-size: 28px; color: var(--lsil);"></i>
+            <div>
+                <h4 style="color: #fde68a; font-family: 'Space Grotesk', sans-serif;">Modo Simulación Activo (Artefactos Faltantes)</h4>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">
+                    Alguno de los archivos de pesos del modelo no se encuentra en el directorio <code>artefactos/</code>. 
+                    El pipeline se ejecutará en <strong>Modo Simulación Heurística</strong> para asegurar su funcionamiento (evaluando núcleos, nitidez y citoplasma, pero asignando etiquetas y confianzas sintéticas).
+                </p>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+{% if status.json_exists %}
+    <div class="card">
+        <div class="card-title">
+            <i class="fa-solid fa-tags" style="color: var(--accent);"></i>
+            Clases Citológicas Identificadas
+        </div>
+        
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">
+            El archivo de configuración tiene registradas las siguientes etiquetas esperadas de citopatología:
+        </p>
+
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            {% for cls in classes %}
+                <span class="badge" style="background-color: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); text-transform: none; font-size: 12px; padding: 8px 16px;">
+                    <i class="fa-solid fa-circle-dot" style="margin-right: 8px; font-size: 9px; color: var(--accent);"></i>
+                    {{ cls }}
+                </span>
+            {% endfor %}
+        </div>
+
+        {% if label_map %}
+            <div class="section-title" style="font-size: 16px; margin-top: 30px;">Mapeo de Índices (Label Map)</div>
+            <pre style="background-color: var(--bg-tertiary); padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px; color: var(--text-secondary); overflow-x: auto;">{{ label_map|json_script:"label-map-data" }}
+<script>
+    // Mostrar JSON formateado
+    const data = JSON.parse(document.getElementById('label-map-data').textContent);
+    document.currentScript.previousSibling.textContent = JSON.stringify(data, null, 4);
+</script></pre>
+        {% endif %}
+    </div>
+{% endif %}
+
+<div class="card">
+    <div class="card-title">
+        <i class="fa-solid fa-circle-info" style="color: var(--accent);"></i>
+        Instrucciones para Colocar Modelos Reales
+    </div>
+    <div style="color: var(--text-secondary); font-size: 14px; line-height: 1.6;">
+        Para habilitar la clasificación real, asegúrese de copiar los siguientes archivos a la carpeta <strong>artefactos/</strong> en el directorio raíz de este proyecto:
+        <ul style="margin-left: 25px; margin-top: 10px;">
+            <li><code>inference_artifacts.json</code> (archivo de mapeo y rutas).</li>
+            <li>El archivo de pesos de PyTorch correspondiente al backbone extractor (ej. <code>densenet121_backbone.pt</code>).</li>
+            <li>El clasificador entrenado de CatBoost (ej. <code>catboost_classifier.cbm</code>).</li>
+            <li>El archivo <code>pca.joblib</code> (si el pipeline fue configurado con PCA).</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,72 @@
+# ==========================================
+# Archivos de caché y compilación de Python
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+
+# ==========================================
+# Entornos virtuales (Python Virtual Envs)
+# ==========================================
+.venv/
+venv/
+env/
+ENV/
+dist/
+build/
+*.egg-info/
+
+# ==========================================
+# Configuración y base de datos de Django
+# ==========================================
+db.sqlite3
+db.sqlite3-journal
+local_settings.py
+celerybeat-schedule
+celerybeat.pid
+
+# ==========================================
+# Archivos multimedia y temporales (Media / Uploads)
+# ==========================================
+/media/
+/static/collected/
+/static/staticfiles/
+/static/wsi_temp/
+
+# ==========================================
+# Modelos de Inteligencia Artificial (Grandes)
+# ==========================================
+# Evita subir los pesos pesados del modelo a Git
+/artefactos/*.pt
+/artefactos/*.cbm
+/artefactos/*.joblib
+/artefactos/*.json
+
+# Si deseas conservar la carpeta vacía en el repositorio:
+!/artefactos/.gitkeep
+
+# ==========================================
+# Editores de código e IDEs (VS Code / PyCharm)
+# ==========================================
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+
+# ==========================================
+# Archivos del Sistema Operativo
+# ==========================================
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+.DS_Store

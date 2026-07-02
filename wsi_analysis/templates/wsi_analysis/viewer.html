@@ -1,0 +1,237 @@
+{% extends 'wsi_analysis/base.html' %}
+{% load static %}
+{% load wsi_tags %}
+
+{% block title %}Visor WSI - {{ run.sample.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .viewer-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+    }
+    .fig-container {
+        position: sticky;
+        top: 30px;
+        text-align: center;
+    }
+    .fig-img {
+        max-width: 100%;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background-color: #000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-title">
+        <h2>Visor de Muestras Citológicas WSI</h2>
+        <p>Estudio de distribución espacial e inspección de candidatos celulares para <strong>{{ run.sample.name }}</strong></p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+        <a href="{% url 'run_detail' run.run_id %}" class="btn-secondary">
+            <i class="fa-solid fa-file-invoice"></i> Reporte
+        </a>
+        <a href="{% url 'dashboard' %}" class="btn-secondary">
+            <i class="fa-solid fa-house"></i> Panel
+        </a>
+    </div>
+</div>
+
+<div class="viewer-layout">
+    <!-- Columna Izquierda: Mapas Espaciales y Heatmaps -->
+    <div class="fig-container">
+        <div class="card" style="padding: 20px;">
+            <div class="card-title">
+                <i class="fa-solid fa-map" style="color: var(--accent);"></i>
+                Mapas de Distribución Espacial
+            </div>
+            
+            <!-- Selector de Mapa -->
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label for="map-selector">Seleccione la Vista Espacial:</label>
+                <select id="map-selector" onchange="switchMap(this.value)">
+                    {% if figures.mapa_candidatos_y_clasificados %}
+                        <option value="mapa_candidatos">Mapa General de Candidatos y Clasificados</option>
+                    {% endif %}
+                    {% if figures.heatmap_densidad_candidatos %}
+                        <option value="heatmap_candidatos">Mapa de Calor: Densidad de Candidatos</option>
+                    {% endif %}
+                    {% if figures.heatmap_densidad_anormales %}
+                        <option value="heatmap_anormales">Mapa de Calor: Densidad de Anormales</option>
+                    {% endif %}
+                    {% if figures.overlay_rois_prioritarios %}
+                        <option value="rois_prioritarios">ROIs Prioritarias (Top 10 Clínico)</option>
+                    {% endif %}
+                </select>
+            </div>
+
+            <!-- Contenedor de Imagen de Mapa -->
+            <div style="background-color: #070a13; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                {% if figures.mapa_candidatos_y_clasificados %}
+                    <img id="active-map-img" src="{{ MEDIA_URL }}{{ figures.mapa_candidatos_y_clasificados }}" class="fig-img" alt="Mapa WSI">
+                {% else %}
+                    <div style="padding: 100px 0; color: var(--text-secondary);">No se generaron mapas espaciales para esta muestra.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna Derecha: Galería de Crops por Clase -->
+    <div>
+        <div class="card">
+            <div class="card-title">
+                <i class="fa-solid fa-microscope" style="color: var(--accent);"></i>
+                Inspección de Candidatos Celulares por Clase
+            </div>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 20px;">
+                Seleccione una clase citológica para ver los crops extraídos del WSI. 
+                Los crops conservan agrupaciones (multinucleadas) y candidatos individuales.
+            </p>
+
+            <!-- Pestañas de Clases -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchClassTab('negative')">Negative</button>
+                <button class="tab-btn" onclick="switchClassTab('ascus')">ASC-US</button>
+                <button class="tab-btn" onclick="switchClassTab('lsil')">LSIL</button>
+                <button class="tab-btn" onclick="switchClassTab('asch')">ASC-H</button>
+                <button class="tab-btn" onclick="switchClassTab('hsil')">HSIL</button>
+                <button class="tab-btn" onclick="switchClassTab('scc')">SCC</button>
+            </div>
+
+            <!-- Contenido de las pestañas -->
+            
+            <!-- 1. Negative -->
+            <div id="tab-negative" class="tab-content active">
+                <div class="gallery-grid">
+                    {% if crops_by_class.Negative_for_intraepithelial_lesion or crops_by_class.Negative %}
+                        {% for crop in crops_by_class.Negative_for_intraepithelial_lesion %}
+                            {% include 'wsi_analysis/crop_card_partial.html' with crop=crop %}
+                        {% endfor %}
+                    {% else %}
+                        <div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">
+                            No se registraron células en esta categoría.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 2. ASC-US -->
+            <div id="tab-ascus" class="tab-content">
+                <div class="gallery-grid">
+                    {% if crops_by_class.ASC_US %}
+                        {% for crop in crops_by_class.ASC_US %}
+                            {% include 'wsi_analysis/crop_card_partial.html' with crop=crop %}
+                        {% endfor %}
+                    {% else %}
+                        <div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">
+                            No se registraron células en esta categoría.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 3. LSIL -->
+            <div id="tab-lsil" class="tab-content">
+                <div class="gallery-grid">
+                    {% if crops_by_class.LSIL %}
+                        {% for crop in crops_by_class.LSIL %}
+                            {% include 'wsi_analysis/crop_card_partial.html' with crop=crop %}
+                        {% endfor %}
+                    {% else %}
+                        <div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">
+                            No se registraron células en esta categoría.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 4. ASC-H -->
+            <div id="tab-asch" class="tab-content">
+                <div class="gallery-grid">
+                    {% if crops_by_class.ASC_H %}
+                        {% for crop in crops_by_class.ASC_H %}
+                            {% include 'wsi_analysis/crop_card_partial.html' with crop=crop %}
+                        {% endfor %}
+                    {% else %}
+                        <div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">
+                            No se registraron células en esta categoría.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 5. HSIL -->
+            <div id="tab-hsil" class="tab-content">
+                <div class="gallery-grid">
+                    {% if crops_by_class.HSIL %}
+                        {% for crop in crops_by_class.HSIL %}
+                            {% include 'wsi_analysis/crop_card_partial.html' with crop=crop %}
+                        {% endfor %}
+                    {% else %}
+                        <div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">
+                            No se registraron células en esta categoría.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 6. SCC -->
+            <div id="tab-scc" class="tab-content">
+                <div class="gallery-grid">
+                    {% if crops_by_class.SCC %}
+                        {% for crop in crops_by_class.SCC %}
+                            {% include 'wsi_analysis/crop_card_partial.html' with crop=crop %}
+                        {% endfor %}
+                    {% else %}
+                        <div style="grid-column: 1/-1; padding: 40px; text-align: center; color: var(--text-muted);">
+                            No se registraron células en esta categoría.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Rutas de imágenes cargadas en Django para intercambio
+    const mapImages = {
+        'mapa_candidatos': "{{ MEDIA_URL }}{{ figures.mapa_candidatos_y_clasificados }}",
+        'heatmap_candidatos': "{{ MEDIA_URL }}{{ figures.heatmap_densidad_candidatos }}",
+        'heatmap_anormales': "{{ MEDIA_URL }}{{ figures.heatmap_densidad_anormales }}",
+        'rois_prioritarios': "{{ MEDIA_URL }}{{ figures.overlay_rois_prioritarios }}"
+    };
+
+    function switchMap(type) {
+        const img = document.getElementById("active-map-img");
+        if (mapImages[type]) {
+            img.src = mapImages[type];
+        }
+    }
+
+    function switchClassTab(tabName) {
+        // Remover clase activa de todos los botones de tab
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            btn.classList.remove("active");
+        });
+
+        // Ocultar todos los contenidos de tab
+        document.querySelectorAll(".tab-content").forEach(content => {
+            content.classList.remove("active");
+        });
+
+        // Activar el botón presionado
+        event.currentTarget.classList.add("active");
+
+        // Mostrar contenido correspondiente
+        document.getElementById(`tab-${tabName}`).classList.add("active");
+    }
+</script>
+{% endblock %}

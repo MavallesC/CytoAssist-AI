@@ -1,0 +1,15 @@
+<div class="crop-card">
+    <a href="{{ MEDIA_URL }}{{ crop.src }}" target="_blank">
+        <img src="{{ MEDIA_URL }}{{ crop.src }}" class="crop-img" alt="{{ crop.crop_name }}" onerror="this.src='https://placehold.co/128x128/1e293b/00d2ff?text=Crop';">
+    </a>
+    <div class="crop-info">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span class="crop-type" style="font-size: 9px;">{{ crop.type }}</span>
+            <span style="color: var(--negative); font-weight: bold; font-size: 9px;">{{ crop.confidence|stringformat:".0%" }}</span>
+        </div>
+        <div style="color: var(--text-muted); font-size: 8px;">
+            <div>Núcleos: <strong>{{ crop.nuc_count }}</strong></div>
+            <div>Pos: {{ crop.x_wsi }}, {{ crop.y_wsi }}</div>
+        </div>
+    </div>
+</div>
