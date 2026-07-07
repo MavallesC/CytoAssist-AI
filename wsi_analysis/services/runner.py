@@ -11,11 +11,11 @@ from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
 
-from ..models import WSISample, AnalysisRun, ROI, CandidateCell, Prediction, GeneratedFigure
+from ..models import WSISample, AnalysisRun, ROI, Slide, CandidateCell, Prediction, GeneratedFigure
 from .wsi_reader import get_wsi_thumbnail, get_wsi_dimensions, read_wsi_region, clear_wsi_cache
 from .masks import foreground_mask_from_thumb, detect_large_artifacts, stain_mask_purple_thumb, build_clean_mask
 from .roi_extraction import extract_rois_grid
-from .candidate_detection import scan_rois_for_candidates
+from .candidate_detection import scan_slides_for_candidates
 from .inference import load_inference_artifacts, predict_crop, predict_crops_batch, check_model_files
 from .aggregation import build_class_summary, build_roi_summary, infer_preliminary_wsi_class
 from .visualization import (
@@ -164,17 +164,55 @@ def run_analysis_pipeline(run_id):
                 y2_wsi=row['y2_wsi']
             )
             roi_db_instances[row['roi_id']] = roi_obj
+
+        # Subdividir ROIs en Slides
+        slide_db_instances = {}
+        slides_list = []
+        slide_width = params.get('slide_width', 1376)
+        slide_height = params.get('slide_height', 1020)
+
+        for roi_id, roi_obj in roi_db_instances.items():
+            X1, Y1, X2, Y2 = roi_obj.x1_wsi, roi_obj.y1_wsi, roi_obj.x2_wsi, roi_obj.y2_wsi
+            slide_idx = 0
+            for y in range(Y1, Y2, slide_height):
+                for x in range(X1, X2, slide_width):
+                    slide_x1 = x
+                    slide_y1 = y
+                    slide_x2 = min(x + slide_width, X2)
+                    slide_y2 = min(y + slide_height, Y2)
+                    
+                    # Evitar slides demasiado pequeños
+                    if (slide_x2 - slide_x1) >= 64 and (slide_y2 - slide_y1) >= 64:
+                        s_id = f"Slide_{roi_obj.roi_id}_{slide_idx:02d}"
+                        slide_obj = Slide.objects.create(
+                            roi=roi_obj,
+                            slide_id=s_id,
+                            x1_wsi=slide_x1,
+                            y1_wsi=slide_y1,
+                            x2_wsi=slide_x2,
+                            y2_wsi=slide_y2
+                        )
+                        slide_db_instances[s_id] = slide_obj
+                        slides_list.append({
+                            "slide_id": s_id,
+                            "roi_id": roi_obj.roi_id,
+                            "x1_wsi": slide_x1,
+                            "y1_wsi": slide_y1,
+                            "x2_wsi": slide_x2,
+                            "y2_wsi": slide_y2
+                        })
+                        slide_idx += 1
             
         timeline["5. Extracción ROIs"] = time.time() - t_start
-        print(f"[{run_id}] >>> Paso 5 completado en {timeline['5. Extracción ROIs']:.4f} s (ROIs encontradas: {len(df_rois)})")
+        print(f"[{run_id}] >>> Paso 5 completado en {timeline['5. Extracción ROIs']:.4f} s (ROIs: {len(df_rois)}, Slides: {len(slides_list)})")
 
-        # 6. Detección de candidatos celulares dentro de las ROIs
-        print(f"[{run_id}] Paso 6: Detectando candidatos celulares...")
+        # 6. Detección de candidatos celulares dentro de los Slides
+        print(f"[{run_id}] Paso 6: Detectando candidatos celulares en slides...")
         t_start = time.time()
-        candidates_raw = scan_rois_for_candidates(wsi_path, df_rois, params)
+        candidates_raw = scan_slides_for_candidates(wsi_path, slides_list, params)
 
         if not candidates_raw:
-            raise ValueError("No se detectó ningún candidato celular en las ROIs seleccionadas.")
+            raise ValueError("No se detectó ningún candidato celular en los slides seleccionados.")
             
         timeline["6. Detección Candidatos"] = time.time() - t_start
         print(f"[{run_id}] >>> Paso 6 completado en {timeline['6. Detección Candidatos']:.4f} s (Candidatos crudos: {len(candidates_raw)})")
@@ -241,115 +279,149 @@ def run_analysis_pipeline(run_id):
         }
 
         # Guardar en base de datos en una sola transacción
-        print(f"[{run_id}] Guardando {len(candidates_raw)} registros en la BD y cultivos en disco...")
-        t_db_start = time.time()
+        print(f"[{run_id}] Guardando {len(candidates_raw)} cultivos en disco...")
+        t_disk_start = time.time()
         
-        with transaction.atomic():
-            for idx, cand in enumerate(candidates_raw):
-                x_w = cand["x_wsi"]
-                y_w = cand["y_wsi"]
-                sz = cand["crop_size"]
+        candidate_cells_to_create = []
+        predictions_data = []
+
+        for idx, cand in enumerate(candidates_raw):
+            x_w = cand["x_wsi"]
+            y_w = cand["y_wsi"]
+            sz = cand["crop_size"]
+            
+            # Calcular centros sobre el thumbnail
+            cx_wsi = x_w + sz / 2.0
+            cy_wsi = y_w + sz / 2.0
+            x_t = float(cx_wsi * sx)
+            y_t = float(cy_wsi * sy)
+
+            crop_img = cand["crop_image"]
+            candidate_type = cand["candidate_type"]
+            nuc_c = cand["nuc_count"]
+
+            # Contabilizar estadísticas de retención
+            if nuc_c == 1:
+                counts_retention["nuc_count_1"] += 1
+            elif nuc_c > 1:
+                counts_retention["nuc_count_gt_1"] += 1
+
+            counts_retention[candidate_type] += 1
+
+            # Guardar el archivo físico del crop si corresponde
+            crop_filename = f"crop_{run_id}_{idx:05d}.png"
+            
+            if candidate_type == 'single_cell':
+                cv2.imwrite(os.path.join(single_cells_out, crop_filename), cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+            elif candidate_type == 'cell_cluster':
+                cv2.imwrite(os.path.join(cell_clusters_out, crop_filename), cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+            elif candidate_type == 'uncertain_candidate':
+                cv2.imwrite(os.path.join(uncertain_out, crop_filename), cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
+
+            # Preparar CandidateCell
+            roi_obj = roi_db_instances.get(cand["roi_id"])
+            slide_obj = slide_db_instances.get(cand.get("slide_id"))
+            cell_db = CandidateCell(
+                run=run,
+                roi=roi_obj,
+                slide=slide_obj,
+                x_slide=cand.get("x_slide"),
+                y_slide=cand.get("y_slide"),
+                crop_name=crop_filename,
+                x_wsi=x_w,
+                y_wsi=y_w,
+                x_thumb=x_t,
+                y_thumb=y_t,
+                crop_size=sz,
+                nuc_count=nuc_c,
+                focus_score=cand["focus_score"],
+                edge_density=cand["edge_density"],
+                cyto_frac=cand["cyto_frac"],
+                candidate_type=candidate_type
+            )
+            candidate_cells_to_create.append(cell_db)
+
+            # Inferencia recuperada del lote o mock
+            if candidate_type in ['single_cell', 'cell_cluster', 'uncertain_candidate']:
+                pred_res = prediction_results[idx]
+                pred_label = pred_res["pred_label"]
+                confidence = pred_res["confidence"]
+                probs = pred_res["probabilities"]
                 
-                # Calcular centros sobre el thumbnail
-                cx_wsi = x_w + sz / 2.0
-                cy_wsi = y_w + sz / 2.0
-                x_t = float(cx_wsi * sx)
-                y_t = float(cy_wsi * sy)
+                counts_retention["classified"] += 1
+            else:
+                pred_label = "Negative for intraepithelial lesion"
+                confidence = 0.0
+                probs = {}
 
-                crop_img = cand["crop_image"]
-                candidate_type = cand["candidate_type"]
-                nuc_c = cand["nuc_count"]
+            # Guardar datos para crear la predicción correspondiente
+            predictions_data.append({
+                "cell_index": len(candidate_cells_to_create) - 1,
+                "pred_label": pred_label,
+                "confidence": confidence,
+                "probabilities": probs
+            })
 
-                # Contabilizar estadísticas de retención
-                if nuc_c == 1:
-                    counts_retention["nuc_count_1"] += 1
-                elif nuc_c > 1:
-                    counts_retention["nuc_count_gt_1"] += 1
+            # Guardar metadatos para reportes
+            records_candidates.append({
+                "roi_id": cand["roi_id"],
+                "slide_id": cand.get("slide_id"),
+                "x_slide": cand.get("x_slide"),
+                "y_slide": cand.get("y_slide"),
+                "crop_name": crop_filename,
+                "x_wsi": x_w,
+                "y_wsi": y_w,
+                "x_thumb": x_t,
+                "y_thumb": y_t,
+                "crop_size": sz,
+                "nuc_count": nuc_c,
+                "focus_score": cand["focus_score"],
+                "edge_density": cand["edge_density"],
+                "cyto_frac": cand["cyto_frac"],
+                "candidate_type": candidate_type
+            })
 
-                counts_retention[candidate_type] += 1
-
-                # Guardar el archivo físico del crop si corresponde
-                crop_filename = f"crop_{run_id}_{idx:05d}.png"
-                
-                if candidate_type == 'single_cell':
-                    cv2.imwrite(os.path.join(single_cells_out, crop_filename), cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
-                elif candidate_type == 'cell_cluster':
-                    cv2.imwrite(os.path.join(cell_clusters_out, crop_filename), cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
-                elif candidate_type == 'uncertain_candidate':
-                    cv2.imwrite(os.path.join(uncertain_out, crop_filename), cv2.cvtColor(crop_img, cv2.COLOR_RGB2BGR))
-
-                # Crear registro en base de datos
-                roi_obj = roi_db_instances.get(cand["roi_id"])
-                cell_db = CandidateCell.objects.create(
-                    run=run,
-                    roi=roi_obj,
-                    crop_name=crop_filename,
-                    x_wsi=x_w,
-                    y_wsi=y_w,
-                    x_thumb=x_t,
-                    y_thumb=y_t,
-                    crop_size=sz,
-                    nuc_count=nuc_c,
-                    focus_score=cand["focus_score"],
-                    edge_density=cand["edge_density"],
-                    cyto_frac=cand["cyto_frac"],
-                    candidate_type=candidate_type
-                )
-
-                # Inferencia recuperada del lote o mock
-                if candidate_type in ['single_cell', 'cell_cluster', 'uncertain_candidate']:
-                    pred_res = prediction_results[idx]
-                    pred_label = pred_res["pred_label"]
-                    confidence = pred_res["confidence"]
-                    probs = pred_res["probabilities"]
-                    
-                    counts_retention["classified"] += 1
-                else:
-                    pred_label = "Negative for intraepithelial lesion"
-                    confidence = 0.0
-                    probs = {}
-
-                # Guardar predicción en la base de datos
-                Prediction.objects.create(
-                    candidate=cell_db,
-                    pred_label=pred_label,
-                    confidence=confidence,
-                    probabilities=probs
-                )
-
-                # Guardar metadatos para reportes
-                records_candidates.append({
+            if candidate_type in ['single_cell', 'cell_cluster', 'uncertain_candidate']:
+                records_predictions.append({
                     "roi_id": cand["roi_id"],
+                    "slide_id": cand.get("slide_id"),
+                    "x_slide": cand.get("x_slide"),
+                    "y_slide": cand.get("y_slide"),
                     "crop_name": crop_filename,
                     "x_wsi": x_w,
                     "y_wsi": y_w,
                     "x_thumb": x_t,
                     "y_thumb": y_t,
-                    "crop_size": sz,
                     "nuc_count": nuc_c,
-                    "focus_score": cand["focus_score"],
-                    "edge_density": cand["edge_density"],
-                    "cyto_frac": cand["cyto_frac"],
-                    "candidate_type": candidate_type
+                    "candidate_type": candidate_type,
+                    "pred_label": pred_label,
+                    "confidence": confidence,
+                    **{f"prob_{k.replace('prob_', '')}": v for k, v in probs.items()}
                 })
 
-                if candidate_type in ['single_cell', 'cell_cluster', 'uncertain_candidate']:
-                    records_predictions.append({
-                        "roi_id": cand["roi_id"],
-                        "crop_name": crop_filename,
-                        "x_wsi": x_w,
-                        "y_wsi": y_w,
-                        "x_thumb": x_t,
-                        "y_thumb": y_t,
-                        "nuc_count": nuc_c,
-                        "candidate_type": candidate_type,
-                        "pred_label": pred_label,
-                        "confidence": confidence,
-                        **{f"prob_{k.replace('prob_', '')}": v for k, v in probs.items()}
-                    })
+        t_disk_end = time.time()
+        print(f"[{run_id}] Escritura en disco completada en {t_disk_end - t_disk_start:.4f} s.")
 
+        print(f"[{run_id}] Guardando registros en la BD...")
+        t_db_start = time.time()
+        with transaction.atomic():
+            created_cells = CandidateCell.objects.bulk_create(candidate_cells_to_create)
+            
+            predictions_to_create = []
+            for pred_item in predictions_data:
+                cell_obj = created_cells[pred_item["cell_index"]]
+                predictions_to_create.append(
+                    Prediction(
+                        candidate=cell_obj,
+                        pred_label=pred_item["pred_label"],
+                        confidence=pred_item["confidence"],
+                        probabilities=pred_item["probabilities"]
+                    )
+                )
+            Prediction.objects.bulk_create(predictions_to_create)
+            
         t_db_end = time.time()
-        print(f"[{run_id}] Escritura en disco y BD completada en {t_db_end - t_db_start:.4f} s.")
+        print(f"[{run_id}] Escritura en BD completada en {t_db_end - t_db_start:.4f} s.")
 
         df_cands_meta = pd.DataFrame(records_candidates)
         df_cands_meta.to_csv(os.path.join(candidates_dir, "candidates_metadata.csv"), index=False)
@@ -381,16 +453,20 @@ def run_analysis_pipeline(run_id):
         df_retention["porcentaje_sobre_total_crops"] = df_retention["n"] / max(1, counts_retention["total_extracted"]) * 100
 
         # Actualizar base de datos de ROIs con los conteos de anormales
-        with transaction.atomic():
-            for _, r_row in summary_by_roi.iterrows():
-                try:
-                    roi_obj = ROI.objects.get(run=run, roi_id=r_row['roi_id'])
-                    roi_obj.n_candidates = int(r_row['n_predicted_cells'])
-                    roi_obj.n_abnormal = int(r_row['n_abnormal_cells'])
-                    roi_obj.priority_score = float(r_row['max_priority'])
-                    roi_obj.save()
-                except Exception:
-                    pass
+        rois_to_update = []
+        for _, r_row in summary_by_roi.iterrows():
+            try:
+                roi_obj = ROI.objects.get(run=run, roi_id=r_row['roi_id'])
+                roi_obj.n_candidates = int(r_row['n_predicted_cells'])
+                roi_obj.n_abnormal = int(r_row['n_abnormal_cells'])
+                roi_obj.priority_score = float(r_row['max_priority'])
+                rois_to_update.append(roi_obj)
+            except Exception:
+                pass
+        
+        if rois_to_update:
+            with transaction.atomic():
+                ROI.objects.bulk_update(rois_to_update, ['n_candidates', 'n_abnormal', 'priority_score'])
 
         # Determinar clase preliminar asistida
         preliminary_report = infer_preliminary_wsi_class(

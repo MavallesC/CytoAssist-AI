@@ -133,11 +133,44 @@
                     <div class="form-help">{{ params_form.max_nucleus_area.help_text }}</div>
                 </div>
             </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="{{ params_form.slide_width.id_for_label }}">{{ params_form.slide_width.label }}</label>
+                    {{ params_form.slide_width }}
+                    <div class="form-help">{{ params_form.slide_width.help_text }}</div>
+                    {% if params_form.slide_width.errors %}
+                        <div style="color: var(--asch); font-size: 12px; margin-top: 5px;">{{ params_form.slide_width.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    <label for="{{ params_form.slide_height.id_for_label }}">{{ params_form.slide_height.label }}</label>
+                    {{ params_form.slide_height }}
+                    <div class="form-help">{{ params_form.slide_height.help_text }}</div>
+                    {% if params_form.slide_height.errors %}
+                        <div style="color: var(--asch); font-size: 12px; margin-top: 5px;">{{ params_form.slide_height.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
 
-            <div class="form-group">
-                <label for="{{ params_form.max_cells_total.id_for_label }}">{{ params_form.max_cells_total.label }}</label>
-                {{ params_form.max_cells_total }}
-                <div class="form-help">{{ params_form.max_cells_total.help_text }}</div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="{{ params_form.max_cells_total.id_for_label }}">{{ params_form.max_cells_total.label }}</label>
+                    {{ params_form.max_cells_total }}
+                    <div class="form-help">{{ params_form.max_cells_total.help_text }}</div>
+                    {% if params_form.max_cells_total.errors %}
+                        <div style="color: var(--asch); font-size: 12px; margin-top: 5px;">{{ params_form.max_cells_total.errors }}</div>
+                    {% endif %}
+                </div>
+                <div class="form-group" style="display: flex; flex-direction: column; justify-content: center; height: 100%;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; margin-bottom: 5px; margin-top: 15px;">
+                        {{ params_form.no_cell_limit }}
+                        <span>{{ params_form.no_cell_limit.label }}</span>
+                    </label>
+                    <div class="form-help">{{ params_form.no_cell_limit.help_text }}</div>
+                    {% if params_form.no_cell_limit.errors %}
+                        <div style="color: var(--asch); font-size: 12px; margin-top: 5px;">{{ params_form.no_cell_limit.errors }}</div>
+                    {% endif %}
+                </div>
             </div>
 
             <div style="display: flex; justify-content: flex-end; gap: 15px; margin-top: 30px;">
@@ -149,4 +182,36 @@
         </div>
     </div>
 </form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const checkbox = document.getElementById("id_no_cell_limit");
+        const limitInput = document.getElementById("id_max_cells_total");
+        
+        function toggleLimit() {
+            if (checkbox && limitInput) {
+                if (checkbox.checked) {
+                    limitInput.value = "500000";
+                    limitInput.readOnly = true;
+                    limitInput.style.opacity = "0.7";
+                    limitInput.style.cursor = "not-allowed";
+                } else {
+                    if (limitInput.value === "500000") {
+                        limitInput.value = "4000";
+                    }
+                    limitInput.readOnly = false;
+                    limitInput.style.opacity = "1";
+                    limitInput.style.cursor = "default";
+                }
+            }
+        }
+        
+        if (checkbox && limitInput) {
+            checkbox.addEventListener("change", toggleLimit);
+            toggleLimit(); // Run initially
+        }
+    });
+</script>
 {% endblock %}

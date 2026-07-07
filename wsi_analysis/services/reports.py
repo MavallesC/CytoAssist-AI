@@ -59,6 +59,15 @@ def generate_html_report(
     
     html_path = os.path.join(report_dir, "reporte_wsi.html")
     
+    # Consultar slides y rois en base de datos
+    try:
+        from wsi_analysis.models import Slide, ROI
+        total_slides = Slide.objects.filter(roi__run__run_id=run_id).count()
+        total_rois = ROI.objects.filter(run__run_id=run_id).count()
+    except Exception:
+        total_slides = 0
+        total_rois = len(summary_by_roi) if summary_by_roi is not None else 0
+
     # Formatear filas de tablas para inyectar en HTML
     class_rows = ""
     if len(summary_by_class) > 0:
@@ -76,11 +85,18 @@ def generate_html_report(
 
     roi_rows = ""
     if len(summary_by_roi) > 0:
+        from wsi_analysis.models import ROI
         # Mostrar top 10 ROIs prioritarias
         for _, row in summary_by_roi.head(10).iterrows():
+            try:
+                roi_obj = ROI.objects.filter(run__run_id=run_id, roi_id=row['roi_id']).first()
+                n_slides = roi_obj.slides.count() if roi_obj else 0
+            except Exception:
+                n_slides = 0
             roi_rows += f"""
             <tr>
                 <td><code>{row['roi_id']}</code></td>
+                <td>{n_slides}</td>
                 <td>{int(row['n_predicted_cells'])}</td>
                 <td style="color: #d62728; font-weight: bold;">{int(row['n_abnormal_cells'])}</td>
                 <td>{row['mean_confidence']:.2%}</td>
@@ -88,7 +104,7 @@ def generate_html_report(
             </tr>
             """
     else:
-        roi_rows = "<tr><td colspan='5'>No se encontraron ROIs procesadas.</td></tr>"
+        roi_rows = "<tr><td colspan='6'>No se encontraron ROIs procesadas.</td></tr>"
 
     retention_rows = ""
     if len(df_retention) > 0:
@@ -281,6 +297,21 @@ def generate_html_report(
             <p style="margin-top: 10px;"><strong>Sustento Clínico:</strong> {preliminary_report.get('reason')}</p>
         </div>
 
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
+            <div style="background-color: #f1f5f9; padding: 15px; border-radius: 6px; text-align: center; border: 1px solid #cbd5e1;">
+                <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600;">ROIs Analizados</div>
+                <div style="font-size: 24px; font-weight: bold; color: #0056b3;">{total_rois}</div>
+            </div>
+            <div style="background-color: #f1f5f9; padding: 15px; border-radius: 6px; text-align: center; border: 1px solid #cbd5e1;">
+                <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600;">Slides (Cuadrantes)</div>
+                <div style="font-size: 24px; font-weight: bold; color: #0056b3;">{total_slides}</div>
+            </div>
+            <div style="background-color: #f1f5f9; padding: 15px; border-radius: 6px; text-align: center; border: 1px solid #cbd5e1;">
+                <div style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600;">Células Evaluadas</div>
+                <div style="font-size: 24px; font-weight: bold; color: #0056b3;">{preliminary_report.get('n_total_predicted_cells', 0)}</div>
+            </div>
+        </div>
+
         <div class="grid">
             <div>
                 <div class="section-title">Distribución por Clase IA</div>
@@ -310,6 +341,8 @@ def generate_html_report(
                     <tbody>
                         <tr><td>Tamaño de Ventana (scanning)</td><td>{parameters.get('tile_size')} px</td></tr>
                         <tr><td>Paso (stride)</td><td>{parameters.get('stride')} px</td></tr>
+                        <tr><td>Ancho del Slide (cuadrante)</td><td>{parameters.get('slide_width', 1376)} px</td></tr>
+                        <tr><td>Alto del Slide (cuadrante)</td><td>{parameters.get('slide_height', 1020)} px</td></tr>
                         <tr><td>Tamaño del Crop</td><td>{parameters.get('crop_size')} px</td></tr>
                         <tr><td>Fracción de Muestra Útil Mín.</td><td>{parameters.get('min_clean_frac')}</td></tr>
                         <tr><td>Score Mín. de Enfoque (Laplacian)</td><td>{parameters.get('min_focus_score')}</td></tr>
@@ -339,6 +372,7 @@ def generate_html_report(
             <thead>
                 <tr>
                     <th>ID ROI</th>
+                    <th>Slides (Sub-recuadros)</th>
                     <th>Células Evaluadas</th>
                     <th>Células Anormales</th>
                     <th>Confianza Promedio</th>
@@ -366,6 +400,36 @@ def generate_html_report(
 
     return html_path
 
+def sanitize_json_data(data):
+    """
+    Recursivamente convierte valores no permitidos en JSON estándar (como NaN o Infinity)
+    en None (que se serializa como null en JSON).
+    """
+    import math
+    import numpy as np
+    if isinstance(data, dict):
+        return {k: sanitize_json_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [sanitize_json_data(v) for v in data]
+    elif pd.isna(data):
+        return None
+    elif isinstance(data, float) or isinstance(data, np.floating):
+        if math.isnan(data) or math.isinf(data):
+            return None
+        return float(data)
+    elif isinstance(data, int) or isinstance(data, np.integer):
+        return int(data)
+    elif hasattr(data, "dtype"): # Tipos escalares de numpy
+        try:
+            val_py = data.item()
+            if isinstance(val_py, float) and (math.isnan(val_py) or math.isinf(val_py)):
+                return None
+            return val_py
+        except Exception:
+            return data
+    else:
+        return data
+
 def generate_json_report(
     run_dir,
     sample_name,
@@ -383,10 +447,21 @@ def generate_json_report(
     os.makedirs(report_dir, exist_ok=True)
     json_path = os.path.join(report_dir, "reporte_wsi.json")
 
+    # Consultar slides y rois en base de datos para incluir en JSON
+    try:
+        from wsi_analysis.models import Slide, ROI
+        total_slides = Slide.objects.filter(roi__run__run_id=run_id).count()
+        total_rois = ROI.objects.filter(run__run_id=run_id).count()
+    except Exception:
+        total_slides = 0
+        total_rois = len(summary_by_roi) if summary_by_roi is not None else 0
+
     report_data = {
         "sample_name": sample_name,
         "run_id": run_id,
         "timestamp": datetime.now().isoformat(),
+        "total_rois": total_rois,
+        "total_slides": total_slides,
         "parameters": parameters,
         "preliminary_result": {
             "class": preliminary_report.get("preliminary_wsi_class"),
@@ -399,6 +474,9 @@ def generate_json_report(
         "roi_summary": summary_by_roi.to_dict(orient="records") if len(summary_by_roi) > 0 else [],
         "retention_summary": df_retention.to_dict(orient="records") if len(df_retention) > 0 else []
     }
+
+    # Sanitizar report_data para evitar NaN o Infinity que rompen el JSON de SQLite
+    report_data = sanitize_json_data(report_data)
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(report_data, f, ensure_ascii=False, indent=2)

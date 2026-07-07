@@ -21,7 +21,7 @@ El tamizaje citológico mediante la tinción de Papanicolaou es el método de re
 El desarrollo del sistema inteligente se estructuró en dos fases metodológicas:
 
 1. **Fase Experimental (Cuaderno Colab):**
-   * Enfocada en el prototipado rápido de algoritmos de segmentación cromática y la evaluación preliminar de modelos de representación visual auto-supervisados ([DINOv2 ViT-B/14 + CatBoost](https://colab.research.google.com/drive/1fFkLRIdpdPNhfHoFtlu8Iv9SVyWUeOYO?usp=sharing)).
+   * Enfocada en el prototipado rápido de algoritmos de segmentación cromática y la evaluación preliminar de modelos de representación visual auto-supervisados ([Modelos Supervisados](https://colab.research.google.com/drive/1fFkLRIdpdPNhfHoFtlu8Iv9SVyWUeOYO?usp=sharing)).
 2. **Fase de Producción Web (CytoAssist AI):**
    * Integración de la lógica en una plataforma Django con base de datos SQLite y soporte offline.
    * Elección del modelo híbrido **DenseNet121 (Backbone de extracción de embeddings) + CatBoost (Clasificador de 6 clases Bethesda)** debido a su estabilidad de generalización, mejor balance de precisión-recall en clases minoritarias y menor consumo de GPU en inferencia en lotes.

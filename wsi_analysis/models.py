@@ -46,6 +46,17 @@ class ROI(models.Model):
     def __str__(self):
         return f"{self.roi_id} in Run {self.run.run_id}"
 
+class Slide(models.Model):
+    roi = models.ForeignKey(ROI, on_delete=models.CASCADE, related_name='slides')
+    slide_id = models.CharField(max_length=50)
+    x1_wsi = models.IntegerField()
+    y1_wsi = models.IntegerField()
+    x2_wsi = models.IntegerField()
+    y2_wsi = models.IntegerField()
+
+    def __str__(self):
+        return f"{self.slide_id} en {self.roi.roi_id}"
+
 class CandidateCell(models.Model):
     CANDIDATE_TYPES = [
         ('single_cell', 'Célula Individual'),
@@ -57,6 +68,9 @@ class CandidateCell(models.Model):
 
     run = models.ForeignKey(AnalysisRun, on_delete=models.CASCADE, related_name='candidates')
     roi = models.ForeignKey(ROI, on_delete=models.SET_NULL, null=True, blank=True, related_name='candidates')
+    slide = models.ForeignKey(Slide, on_delete=models.SET_NULL, null=True, blank=True, related_name='candidates')
+    x_slide = models.IntegerField(null=True, blank=True)
+    y_slide = models.IntegerField(null=True, blank=True)
     crop_name = models.CharField(max_length=255)
     x_wsi = models.IntegerField()
     y_wsi = models.IntegerField()

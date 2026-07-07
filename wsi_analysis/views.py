@@ -92,6 +92,11 @@ def upload_sample(request):
 
             messages.success(request, f"Muestra '{sample.name}' creada y corrida {run_id} iniciada.")
             return redirect('dashboard')
+        else:
+            print("--- [ERROR] Formulario Inválido ---")
+            print("Errores de sample_form:", sample_form.errors.as_data())
+            print("Errores de params_form:", params_form.errors.as_data())
+            print("-----------------------------------")
     else:
         sample_form = WSISampleUploadForm()
         params_form = PipelineParametersForm()
@@ -121,6 +126,12 @@ def run_detail(request, run_id):
     # Obtener el top 10 de ROIs prioritarios para mostrar en una tabla
     top_rois = run.rois.all().order_by('-priority_score', '-n_abnormal')[:10]
 
+    # Calcular contadores del flujo
+    total_rois = run.rois.count()
+    from .models import Slide
+    total_slides = Slide.objects.filter(roi__run=run).count()
+    total_cells = run.candidates.count()
+
     return render(request, 'wsi_analysis/detail.html', {
         'run': run,
         'qc_figures': qc_figures,
@@ -128,7 +139,10 @@ def run_detail(request, run_id):
         'prelim': prelim,
         'class_summary': class_summary,
         'retention_summary': retention_summary,
-        'top_rois': top_rois
+        'top_rois': top_rois,
+        'total_rois': total_rois,
+        'total_slides': total_slides,
+        'total_cells': total_cells,
     })
 
 def run_viewer(request, run_id):
@@ -141,8 +155,8 @@ def run_viewer(request, run_id):
     # Obtener figuras relevantes
     figures = {fig.figure_type: fig.image_path for fig in run.figures.all()}
     
-    # Obtener candidatos categorizados
-    candidates = run.candidates.select_related('prediction').all()
+    # Obtener candidatos categorizados optimizados con slide
+    candidates = run.candidates.select_related('prediction', 'slide').all()
     
     # Crops de interés agrupados por clase clínica (mapeo seguro para plantillas)
     crops_by_class = {
@@ -186,6 +200,9 @@ def run_viewer(request, run_id):
                     'confidence': cand.prediction.confidence,
                     'x_wsi': cand.x_wsi,
                     'y_wsi': cand.y_wsi,
+                    'slide_id': cand.slide.slide_id if cand.slide else "N/A",
+                    'x_slide': cand.x_slide if cand.x_slide is not None else "N/A",
+                    'y_slide': cand.y_slide if cand.y_slide is not None else "N/A",
                     'src': f"results/{run_dir_name}/candidates/{subdir}/{cand.crop_name}"
                 })
 

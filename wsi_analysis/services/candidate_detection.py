@@ -264,30 +264,31 @@ def extract_crops_from_tile(
 
     return candidates
 
-def scan_rois_for_candidates(
+def scan_slides_for_candidates(
     wsi_path,
-    df_rois,
+    slides_list,
     params,
     progress_callback=None
 ):
     """
-    Orquesta el escaneo de todas las ROIs y extrae los candidatos celulares.
+    Orquesta el escaneo de todos los Slides (sub-recuadros de los ROIs) y extrae los candidatos celulares.
     """
     tile_size = params.get('tile_size', 256)
     stride = params.get('stride', 128)
-    max_cells_total = params.get('max_cells_total', 4000)
+    limit = params.get('max_cells_total', 4000)
 
     all_candidates = []
-    total_rois = len(df_rois)
+    total_slides = len(slides_list)
 
-    for idx, r in df_rois.iterrows():
-        roi_id = r["roi_id"]
-        X1, Y1, X2, Y2 = int(r["x1_wsi"]), int(r["y1_wsi"]), int(r["x2_wsi"]), int(r["y2_wsi"])
+    for idx, s in enumerate(slides_list):
+        slide_id = s["slide_id"]
+        roi_id = s["roi_id"]
+        X1, Y1, X2, Y2 = int(s["x1_wsi"]), int(s["y1_wsi"]), int(s["x2_wsi"]), int(s["y2_wsi"])
 
-        roi_candidates = 0
+        slide_candidates = 0
 
         for yy in range(Y1, Y2 - tile_size + 1, stride):
-            # Pre-leer la fila completa del ROI a esta altura yy para evitar decodificar las mismas tiras/celdas repetidamente
+            # Pre-leer la fila completa del Slide a esta altura yy para evitar decodificar las mismas tiras/celdas repetidamente
             row_width = X2 - X1
             if row_width < tile_size:
                 continue
@@ -304,20 +305,25 @@ def scan_rois_for_candidates(
                 candidates = extract_crops_from_tile(tile, xx, yy, params)
 
                 for cand in candidates:
-                    cand.update({"roi_id": roi_id})
+                    cand.update({
+                        "roi_id": roi_id,
+                        "slide_id": slide_id,
+                        "x_slide": cand["x_wsi"] - X1,
+                        "y_slide": cand["y_wsi"] - Y1
+                    })
                     all_candidates.append(cand)
-                    roi_candidates += 1
+                    slide_candidates += 1
 
-                if len(all_candidates) >= max_cells_total:
+                if limit > 0 and len(all_candidates) >= limit:
                     break
-            if len(all_candidates) >= max_cells_total:
+            if limit > 0 and len(all_candidates) >= limit:
                 break
 
         if progress_callback:
-            progress_callback(idx + 1, total_rois, len(all_candidates))
+            progress_callback(idx + 1, total_slides, len(all_candidates))
 
-        if len(all_candidates) >= max_cells_total:
-            print(f"Llegado al límite máximo de candidatos ({max_cells_total})")
+        if limit > 0 and len(all_candidates) >= limit:
+            print(f"Llegado al límite máximo de candidatos ({limit})")
             break
 
     return all_candidates

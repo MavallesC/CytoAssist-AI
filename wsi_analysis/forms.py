@@ -92,11 +92,32 @@ class PipelineParametersForm(forms.Form):
         help_text="Área máxima para clasificar un núcleo."
     )
     max_cells_total = forms.IntegerField(
+        required=False,
         initial=4000,
         min_value=10,
-        max_value=20000,
+        max_value=1000000,
         label="Límite Total de Candidatos",
         help_text="Límite máximo de crops a extraer de toda la lámina."
+    )
+    no_cell_limit = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Sin límite de candidatos",
+        help_text="Desactiva el límite de candidatos para escanear y clasificar todas las células de la muestra (puede tardar considerablemente más tiempo)."
+    )
+    slide_width = forms.IntegerField(
+        initial=1376,
+        min_value=256,
+        max_value=4096,
+        label="Ancho del Slide (WSI)",
+        help_text="Ancho de cada recuadro interno (slide) en píxeles WSI."
+    )
+    slide_height = forms.IntegerField(
+        initial=1020,
+        min_value=256,
+        max_value=4096,
+        label="Alto del Slide (WSI)",
+        help_text="Alto de cada recuadro interno (slide) en píxeles WSI."
     )
     min_conf_priority = forms.FloatField(
         initial=0.50,
@@ -105,3 +126,15 @@ class PipelineParametersForm(forms.Form):
         label="Confianza Mínima de Prioridad",
         help_text="Confianza mínima requerida para activar alertas de hallazgos críticos (SCC, HSIL, ASC-H)."
     )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        no_cell_limit = cleaned_data.get('no_cell_limit')
+        max_cells_total = cleaned_data.get('max_cells_total')
+
+        if no_cell_limit:
+            cleaned_data['max_cells_total'] = 500000
+        elif max_cells_total is None:
+            self.add_error('max_cells_total', "Debe ingresar un límite de candidatos si no activa la opción sin límite.")
+            
+        return cleaned_data
