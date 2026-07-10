@@ -66,6 +66,7 @@ graph TD
 5. **Clasificación por IA (`inference.py`):** Extracción de embeddings de 1024 dimensiones con el extractor DenseNet121 y predicción probabilística de 6 clases Bethesda mediante CatBoost, ejecutado optimizadamente en GPU por lotes (Batch Size = 64).
 6. **Agregación e Inferencia Global (`aggregation.py`):** Consolidación cuantitativa celular y aplicación de reglas de prioridad diagnóstica clínica para emitir el informe final.
 7. **Visualización y Reportes (`reports.py`, `visualization.py`):** Renderizado de mapas de calor espaciales de densidad celular y lesional, y compilación del reporte HTML descargable e imprimible.
+8. **Módulo de Exportación Jerárquica y Portabilidad (`views.py`):** Módulo de descarga estructurada que permite exportar la muestra, sus ROIs y cuadrantes constituyentes (Slides) en un archivo comprimido ZIP. Lee y recorta en tiempo real los cuadrantes a escala completa desde el WSI original, manteniendo los colores de tinción en formato BGR/JPEG, y almacenándolos en caché en disco (`media/exports/`) para descargas inmediatas posteriores.
 
 ---
 

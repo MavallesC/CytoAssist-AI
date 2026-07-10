@@ -91,6 +91,9 @@
             <a href="{% url 'download_json' run.run_id %}" class="btn-secondary" style="padding: 8px 16px; font-size: 13px;">
                 <i class="fa-solid fa-file-code"></i> Metadatos Completos (JSON)
             </a>
+            <a href="{% url 'export_sample_crops' run.run_id %}" id="btn-export-crops" class="btn-primary" style="padding: 8px 16px; font-size: 13px; color: #0b0f19;">
+                <i class="fa-solid fa-file-zipper"></i> Exportar Muestra y Recortes (ZIP)
+            </a>
         </div>
     </div>
 
@@ -230,4 +233,102 @@
         </div>
     </div>
 {% endif %}
+
+<style>
+/* Estilo Premium para el Modal de Carga de Exportación */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(11, 15, 25, 0.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.loading-overlay.show {
+    opacity: 1;
+    visibility: visible;
+}
+.loading-card {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-glow);
+    padding: 40px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 210, 255, 0.2);
+    max-width: 420px;
+    width: 90%;
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+.loading-overlay.show .loading-card {
+    transform: scale(1);
+}
+</style>
+
+<!-- Modal de Precarga para la Exportación ZIP -->
+<div id="export-loading-overlay" class="loading-overlay">
+    <div class="loading-card">
+        <i class="fa-solid fa-file-zipper fa-spin" style="font-size: 54px; color: var(--accent); margin-bottom: 25px; text-shadow: 0 0 15px var(--accent-glow);"></i>
+        <h3 style="font-family: 'Space Grotesk', sans-serif; font-size: 22px; margin-bottom: 12px; color: var(--text-primary);">Generando Exportación ZIP</h3>
+        <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 15px;">
+            El servidor está recortando los ROIs y cuadrantes (slides) a resolución base directa del frotis WSI y empaquetándolos.
+        </p>
+        <p style="color: var(--text-muted); font-size: 12px; font-style: italic;">
+            Este proceso puede demorar unos segundos debido a la carga de datos del digitalizador gigapíxel...
+        </p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btnExport = document.getElementById('btn-export-crops');
+    const overlay = document.getElementById('export-loading-overlay');
+    
+    if (btnExport && overlay) {
+        btnExport.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Mostrar modal de carga
+            overlay.classList.add('show');
+            
+            const prepareUrl = btnExport.href + '?prepare=1';
+            
+            fetch(prepareUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Error en el servidor al generar el archivo ZIP.');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status === 'ready') {
+                        // Una vez listo, redirigir a la descarga real sin ?prepare=1
+                        window.location.href = btnExport.href;
+                        // Cerrar modal tras un pequeño delay para que la transición sea fluida
+                        setTimeout(() => {
+                            overlay.classList.remove('show');
+                        }, 2000);
+                    } else {
+                        throw new Error(data.message || 'Error desconocido.');
+                    }
+                })
+                .catch(error => {
+                    overlay.classList.remove('show');
+                    alert('Error al exportar la muestra: ' + error.message);
+                });
+        });
+    }
+});
+</script>
 {% endblock %}

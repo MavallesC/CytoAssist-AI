@@ -17,6 +17,7 @@ urlpatterns = [
     path('runs/<str:run_id>/download/report/', views.download_report, name='download_report'),
     path('runs/<str:run_id>/download/predictions/', views.download_predictions, name='download_predictions'),
     path('runs/<str:run_id>/download/json/', views.download_json, name='download_json'),
+    path('runs/<str:run_id>/export/', views.export_sample_crops, name='export_sample_crops'),
     
     # APIs AJAX
     path('api/runs/<str:run_id>/status/', views.api_run_status, name='api_run_status'),

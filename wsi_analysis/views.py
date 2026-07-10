@@ -1,4 +1,5 @@
 import os
+import json
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, FileResponse, Http404
 from django.contrib import messages
@@ -318,3 +319,113 @@ def download_json(request, run_id):
     if os.path.exists(file_path):
         return FileResponse(open(file_path, 'rb'), content_type='application/json', filename=f"reporte_wsi_{run_id}.json")
     raise Http404("Reporte JSON no encontrado.")
+
+def export_sample_crops(request, run_id):
+    """
+    Exporta la muestra, los ROIs y sus slides correspondientes en un archivo ZIP estructurado:
+    WSI_Name/
+      ROI_000/
+        ROI_000.jpg
+        Slide_1.jpg
+        Slide_2.jpg
+      ...
+    """
+    import zipfile
+    import re
+    import cv2
+    from .models import Slide
+    from .services.wsi_reader import read_wsi_region, clear_wsi_cache
+
+    run = get_object_or_404(AnalysisRun, run_id=run_id)
+    wsi_path = run.sample.file_path
+    
+    # Directorio de exportaciones
+    exports_dir = os.path.join(settings.MEDIA_ROOT, 'exports')
+    os.makedirs(exports_dir, exist_ok=True)
+    
+    # Nombre del archivo zip basado en el ID de la muestra y la corrida
+    zip_filename = f"export_{run.sample.id}_{run.run_id}.zip"
+    zip_path = os.path.join(exports_dir, zip_filename)
+    
+    # Limpiar caracteres inválidos para el nombre de la carpeta raíz dentro del zip
+    safe_sample_name = re.sub(r'[^a-zA-Z0-9_]', '_', run.sample.name)
+    if not safe_sample_name:
+        safe_sample_name = f"sample_{run.sample.id}"
+        
+    prepare_mode = request.GET.get('prepare') == '1'
+    
+    if prepare_mode:
+        # Si ya existe, no es necesario volver a crearlo
+        if os.path.exists(zip_path):
+            return JsonResponse({'status': 'ready', 'message': 'El archivo ya estaba listo.'})
+            
+        import uuid
+        temp_zip_filename = f"export_{run.sample.id}_{run.run_id}_{uuid.uuid4().hex}.tmp"
+        temp_zip_path = os.path.join(exports_dir, temp_zip_filename)
+        clear_wsi_cache()
+        
+        try:
+            with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # Obtener ROIs ordenados
+                rois = run.rois.all().order_by('roi_id')
+                
+                for roi in rois:
+                    roi_w = roi.x2_wsi - roi.x1_wsi
+                    roi_h = roi.y2_wsi - roi.y1_wsi
+                    
+                    # 1. Recortar e incorporar la imagen completa del ROI
+                    if roi_w > 0 and roi_h > 0:
+                        roi_img = read_wsi_region(wsi_path, roi.x1_wsi, roi.y1_wsi, roi_w, roi_h)
+                        # Convertir RGB (retornado por wsi_reader) a BGR para guardar correctamente
+                        roi_img_bgr = cv2.cvtColor(roi_img, cv2.COLOR_RGB2BGR)
+                        
+                        _, roi_jpg = cv2.imencode('.jpg', roi_img_bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                        
+                        roi_in_zip_path = f"{safe_sample_name}/{roi.roi_id}/{roi.roi_id}.jpg"
+                        zip_file.writestr(roi_in_zip_path, roi_jpg.tobytes())
+                    
+                    # 2. Recortar e incorporar las imágenes de cada Slide dentro de este ROI
+                    slides = roi.slides.all().order_by('slide_id')
+                    for idx, slide in enumerate(slides, start=1):
+                        slide_w = slide.x2_wsi - slide.x1_wsi
+                        slide_h = slide.y2_wsi - slide.y1_wsi
+                        
+                        if slide_w > 0 and slide_h > 0:
+                            slide_img = read_wsi_region(wsi_path, slide.x1_wsi, slide.y1_wsi, slide_w, slide_h)
+                            slide_img_bgr = cv2.cvtColor(slide_img, cv2.COLOR_RGB2BGR)
+                            
+                            _, slide_jpg = cv2.imencode('.jpg', slide_img_bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                            
+                            slide_in_zip_path = f"{safe_sample_name}/{roi.roi_id}/Slide_{idx}.jpg"
+                            zip_file.writestr(slide_in_zip_path, slide_jpg.tobytes())
+                            
+            # Intentar renombrar el archivo temporal de forma segura
+            try:
+                os.replace(temp_zip_path, zip_path)
+            except OSError:
+                # Si falla porque el destino ya existe y está bloqueado/utilizado por otro proceso,
+                # verificamos si el archivo de destino existe para darlo por bueno
+                if os.path.exists(zip_path):
+                    try:
+                        os.remove(temp_zip_path)
+                    except OSError:
+                        pass
+                else:
+                    raise
+            return JsonResponse({'status': 'ready', 'message': 'Exportación generada correctamente.'})
+            
+        except Exception as e:
+            if os.path.exists(temp_zip_path):
+                try:
+                    os.remove(temp_zip_path)
+                except OSError:
+                    pass
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+        finally:
+            clear_wsi_cache()
+            
+    else:
+        # Modo descarga directa
+        if not os.path.exists(zip_path):
+            raise Http404("El archivo ZIP de exportación no ha sido preparado aún.")
+        return FileResponse(open(zip_path, 'rb'), content_type='application/zip', filename=f"{safe_sample_name}_export.zip")

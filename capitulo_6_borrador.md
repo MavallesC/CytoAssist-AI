@@ -89,6 +89,9 @@ graph TD
 7. **Consolidación y Reporte (`aggregation.py`, `reports.py`):**
    El orquestador en segundo plano (`runner.py`) consolida las predicciones en una única transacción de base de datos (`transaction.atomic`) y ejecuta las reglas de agregación clínica. Genera mapas de calor de densidad celular y de anormalidades, y compila el reporte clínico HTML.
 
+8. **Módulo de Exportación Jerárquica y Portabilidad (`views.py`):**
+   A solicitud del especialista desde la interfaz web, el sistema extrae de forma dinámica las regiones gigapíxel del WSI correspondientes a cada ROI y Slide, codificándolas como imágenes JPEG independientes. Estas imágenes se empaquetan en un archivo comprimido ZIP estructurado jerárquicamente por muestra, ROI e índice de cuadrante (Slide) secuencial. El módulo cuenta con un caché persistente en disco en `media/exports/` para descargas instantáneas y un spinner interactivo para guiar al usuario durante el tiempo de procesamiento.
+
 ---
 
 ## 6.5 Categorías de diagnóstico y lógica de decisión
