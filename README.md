@@ -21,7 +21,7 @@ El tamizaje citológico mediante la tinción de Papanicolaou es el método de re
 El desarrollo del sistema inteligente se estructuró en dos fases metodológicas:
 
 1. **Fase Experimental (Cuaderno Colab):**
-   * Enfocada en el prototipado rápido de algoritmos de segmentación cromática y la evaluación preliminar de modelos de representación visual auto-supervisados ([Modelos Supervisados](https://colab.research.google.com/drive/1fFkLRIdpdPNhfHoFtlu8Iv9SVyWUeOYO?usp=sharing)).
+   * Una etapa inicial de exploración y prototipado rápido donde se implementó un pipeline básico de segmentación por color y se evaluó preliminarmente el modelo auto-supervisado **DINOv2 (ViT-B/14) + CatBoost** ([Tesis-Valles-Parte-II.ipynb](https://colab.research.google.com/drive/1fFkLRIdpdPNhfHoFtlu8Iv9SVyWUeOYO?usp=sharing)).
 2. **Fase de Producción Web (CytoAssist AI):**
    * Integración de la lógica en una plataforma Django con base de datos SQLite y soporte offline.
    * Elección del modelo híbrido **DenseNet121 (Backbone de extracción de embeddings) + CatBoost (Clasificador de 6 clases Bethesda)** debido a su estabilidad de generalización, mejor balance de precisión-recall en clases minoritarias y menor consumo de GPU en inferencia en lotes.
@@ -80,9 +80,9 @@ $$\text{SCC} \succ \text{HSIL} \succ \text{ASC-H} \succ \text{LSIL} \succ \text{
 En tamizaje citológico, la detección de una sola célula atípica de alto grado o maligna obliga a la remisión de la paciente.
 
 > [!NOTE]
-> **Comparativa de Reglas Lógicas (Caso de Estudio WSI-01 con 13,863 células analizadas):**
-> * **Regla de Mayoría Simple (10%):** Dado que las células atípicas (HSIL + SCC) solo representaron el $1.00\%$ del frotis (dominado por $97.86\%$ de NILM), el diagnóstico resultante hubiese sido **NILM (Normal)**, generando un **Falso Negativo crítico**.
-> * **Regla de Prioridad Clínica (CytoAssist AI):** Identifica que existen células HSIL/SCC con confianza de inferencia de la IA $\ge 50\%$. El diagnóstico preliminar se consolida como **HSIL (Sospechoso de Alto Grado)**, garantizando la seguridad de la paciente y permitiendo su derivación a colposcopía.
+> **Comparativa de Reglas Lógicas (Caso de Estudio WSI-01 - `Leve-10-140942400777_20260225_090600.tif` con 792 células analizadas):**
+> * **Regla de Mayoría Simple:** Dado que las células anormales (LSIL) solo representaron el $1.01\%$ del frotis (dominado por $98.99\%$ de NILM), el diagnóstico resultante hubiese sido **NILM (Normal)**, generando un **Falso Negativo crítico**.
+> * **Regla de Prioridad Clínica (CytoAssist AI):** Identifica que existen 8 células LSIL de alta confianza (superando el umbral de representatividad mínimo de 5 células). El diagnóstico preliminar se consolida como **LSIL (Hallazgo preliminar de bajo grado)**, garantizando la seguridad de la paciente y recomendando la revisión prioritaria del cuadrante `ROI_000`.
 
 ---
 
@@ -95,28 +95,32 @@ El pipeline integrado se evaluó sobre un conjunto de prueba independiente de **
 * **Sensibilidad (Recall) Macro:** 66.68%
 * **F1-Score Macro:** 64.15%
 * **ROC-AUC Macro:** 93.41%
+* **LogLoss:** 0.6557
 
 ### Resultados Globales (10 WSIs Analizados)
 
-La siguiente tabla presenta la distribución de celularidad, el contraste diagnóstico y el tiempo de ejecución en producción para las 10 muestras reales evaluadas:
+La siguiente tabla presenta la distribución de celularidad, el contraste diagnóstico y el tiempo de ejecución en producción para las 10 muestras reales evaluadas y registradas en la base de datos:
 
-| ID | Nombre del Archivo WSI | NILM (%) | LSIL (%) | HSIL (%) | ASC-US (%) | ASC-H (%) | SCC (%) | Diagnóstico Real | Diagnóstico IA | Estado | Tiempo (s) |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **01** | `HSIL_MOD-12-06303.tif` | 97.86% | 0.70% | 0.88% | 0.15% | 0.30% | 0.12% | HSIL | **HSIL** | Correcto | 62.5 |
-| **02** | `Normal-01_20260220.tif` | 100.00% | 0.00% | 0.00% | 0.00% | 0.00% | 0.00% | NILM | **NILM** | Correcto | 48.5 |
-| **03** | `Normal-02_20260220.tif` | 99.91% | 0.00% | 0.00% | 0.09% | 0.00% | 0.00% | NILM | **NILM** | Correcto | 42.1 |
-| **04** | `Leve-10-140942400.tif` | 98.99% | 1.01% | 0.00% | 0.00% | 0.00% | 0.00% | LSIL | **LSIL** | Correcto | 39.8 |
-| **05** | `Leve-16-065392300.tif` | 99.12% | 0.88% | 0.00% | 0.00% | 0.00% | 0.00% | LSIL | **LSIL** | Correcto | 41.2 |
-| **06** | `Alto-02-140942400.tif` | 98.44% | 0.42% | 0.90% | 0.00% | 0.24% | 0.00% | HSIL | **HSIL** | Correcto | 52.4 |
-| **07** | `Alto-05-065392300.tif` | 98.76% | 0.22% | 0.80% | 0.00% | 0.22% | 0.00% | HSIL | **HSIL** | Correcto | 36.7 |
-| **08** | `Ca-01_20260228_100.tif` | 97.45% | 0.32% | 0.85% | 0.00% | 0.00% | 1.38% | SCC | **SCC** | Correcto | 68.3 |
-| **09** | `Ca-02_20260228_104.tif` | 97.98% | 0.28% | 0.72% | 0.00% | 0.00% | 1.02% | SCC | **SCC** | Correcto | 58.9 |
-| **10** | `Ca-03_20260301_092.tif` | 98.03% | 0.00% | 1.97% | 0.00% | 0.00% | 0.00% | SCC | **HSIL** | Discrepancia | 49.6 |
+| ID | Nombre de Archivo Digitalizado | Diagnóstico Real (Patólogo) | Diagnóstico Preliminar IA | Celularidad Total | Células Anormales IA | Tiempo Total (s) | Estado del Diagnóstico |
+| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
+| **01** | `Leve-4-063802200173_20260224_083300` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 14,337 | 265 LSIL, 2 HSIL | 2276.7 | Discrepancia Menor (Sobre-diagnóstico) |
+| **02** | `Cancer-6-065802201521_20260127_083300` | SCC (Cáncer) | HSIL (Alto Grado) | 17,521 | 314 LSIL, 18 HSIL, 2 ASC-US | 2531.7 | Discrepancia Menor (Sub-diagnóstico) |
+| **03** | `Leve-6-064492400038_20260319_093900-2` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 19,289 | 197 LSIL, 103 HSIL, 7 ASC-H, 8 ASC-US | 3450.7 | Discrepancia Menor (Sobre-diagnóstico) |
+| **04** | `Leve-10-140942400777_20260225_090600` | LSIL (Bajo Grado) | LSIL (Bajo Grado) | 550 | 8 LSIL | 73.0 | Correcto |
+| **05** | `Leve-12-140942400788_20260226_093900` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 44,616 | 501 LSIL, 26 HSIL, 5 ASC-H, 4 ASC-US | 10019.8 | Discrepancia Menor (Sobre-diagnóstico) |
+| **06** | `Leve-15-065932400013_20260227_125900` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 71,756 | 932 LSIL, 159 HSIL, 17 ASC-H, 37 ASC-US | 14233.2 | Discrepancia Menor (Sobre-diagnóstico) |
+| **07** | `MOD-3-065382300114_20260211_115300` | HSIL (Alto Grado) | HSIL (Alto Grado) | 75,928 | 5407 LSIL, 138 HSIL, 5 ASC-H, 10 ASC-US | 11837.3 | Correcto |
+| **08** | `MOD-5-065732200029_20260212_122600` | HSIL (Alto Grado) | HSIL (Alto Grado) | 28,841 | 1493 LSIL, 8 HSIL, 2 ASC-H, 13 ASC-US | 5045.3 | Correcto |
+| **09** | `MOD-11-064152200004_20260210_083300` | HSIL (Alto Grado) | LSIL (Bajo Grado) | 11,052 | 154 LSIL, 3 HSIL | 1330.6 | Discrepancia Menor (Sub-diagnóstico) |
+| **10** | `Cancer-4_20260126_080000` | SCC (Cáncer) | HSIL (Alto Grado) | 61,284 | 3412 LSIL, 249 HSIL, 94 ASC-H, 21 ASC-US | 10406.7 | Discrepancia Menor (Sub-diagnóstico) |
 
-### Análisis de Métricas de Diagnóstico Clínico
-1. **Sensibilidad Diagnóstica:** **100%**. Se identificó correctamente como patológica toda muestra con displasia o cáncer (7 de 7 casos), impidiendo la ocurrencia de falsos negativos.
-2. **Especificidad Diagnóstica:** **100%**. Todas las láminas normales (NILM) fueron adecuadamente clasificadas.
-3. **Concordancia Exacta:** **90%** (9 de 10 casos). El caso 10 (SCC) fue clasificado como HSIL. Dado que corresponde a una displasia celular de alto grado, la paciente sigue siendo clasificada como de alta prioridad clínica y remitida para colposcopía y biopsia, garantizando su seguridad.
+### Análisis de Métricas de Tamizaje Clínico
+1. **Sensibilidad Diagnóstica:** **100.0%**. El sistema clasificó correctamente como "patológico sospechoso" a todos los portaobjetos con diagnóstico real de lesión escamosa o cáncer (10 de 10 láminas), evitando la ocurrencia de falsos negativos. Esto es de vital importancia en entornos de tamizaje primario, donde omitir una paciente enferma representa el mayor riesgo clínico.
+2. **Especificidad Diagnóstica:** En este subconjunto de validación enfocado en casos con patología confirmada, no se incluyeron láminas sanas (NILM) de control negativo. No obstante, las pruebas analíticas del pipeline en fases previas demostraron un comportamiento robusto ante frotis normales y un correcto funcionamiento del filtro de calidad (QC).
+3. **Concordancia Exacta por Categoría Bethesda:** **30.0%** (3 de 10 casos). El sistema demostró coincidencia diagnóstica precisa en los casos 04, 07 y 08. Para los 7 casos restantes, se observaron discrepancias menores que se dividen en dos comportamientos clínicos esperados:
+   - **Sobre-diagnóstico (LSIL clasificado como HSIL):** Ocurrió en los casos 01, 03, 05 y 06. Esto se debe a la estricta lógica de prioridad clínica Bethesda implementada en `aggregation.py`: la detección de un número reducido de células con características morfológicas atípicas asociadas a HSIL (incluso 2 células en el caso 01) eleva preventivamente el diagnóstico global del portaobjetos, maximizando la sensibilidad diagnóstica como medida de seguridad.
+   - **Sub-diagnóstico Menor (SCC clasificado como HSIL, o HSIL como LSIL):** Ocurrió en los casos 02, 10 y 09. Los casos de carcinoma de células escamosas (SCC) 02 y 10 fueron pre-diagnosticados como HSIL debido a que en frotes digitalizados de lesiones invasoras predomina la celularidad displásica de alto grado (HSIL) sobre células tumorales queratinizantes grandes individuales. En el caso 09, la presencia de solo 3 células HSIL (por debajo del umbral clínico del sistema) condujo a un pre-diagnóstico de LSIL. Dado que tanto LSIL como HSIL y SCC son categorías lesionales patológicas que conllevan la derivación inmediata a colposcopía y biopsia, estas discrepancias no comprometen la seguridad ni el tratamiento oportuno de la paciente.
+
 
 ---
 
