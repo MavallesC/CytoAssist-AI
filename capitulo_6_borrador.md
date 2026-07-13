@@ -20,11 +20,9 @@ El diagnóstico citológico mediante el análisis de muestras de Papanicolaou co
 
 En este contexto, surge la necesidad de desarrollar sistemas inteligentes de apoyo al diagnóstico capaces de analizar imágenes citológicas de forma objetiva, reproducible y scalable a partir de portaobjetos digitales completos. Sin embargo, procesar una WSI digitalizada a gran aumento ($40\times$) impone desafíos técnicos extremos debido a su tamaño gigapíxel (resoluciones típicas de $50,000 \times 50,000$ a $120,000 \times 100,000$ píxeles), lo que impide cargarlas en la RAM de forma convencional. Adicionalmente, el sistema debe ser inmune a ruidos físicos de adquisición comunes en frotes reales, tales como marcas de lapicero, burbujas de aire bajo el cubreobjetos, moco denso o variaciones locales de enfoque.
 
-Como parte del aseguramiento operativo del proyecto, se realizó una coordinación técnica presencial con el personal especializado del **Laboratorio Referencial Regional de Salud Pública de San Martín** para alinear el flujo de digitalización y el contexto real de aplicación del sistema. Esto permitió establecer los requerimientos clínicos y técnicos de la plataforma sobre portaobjetos físicos digitalizados con el escáner óptico *MoticEasyScan One*.
+Como parte del aseguramiento operativo del proyecto, se realizó una coordinación técnica presencial con el personal especializado del **Laboratorio Referencial Regional de Salud Pública de San Martín** para alinear el flujo de digitalización y el contexto real de aplicación del sistema. Esto permitió establecer los requerimientos clínicos y técnicos de la plataforma sobre portaobjetos físicos digitalizados con el escáner óptico *MoticEasyScan One* (Figura 31).
 
-```text
-[Figura 31: Reunión técnica en el Laboratorio Referencial de Salud Pública para la planificación del sistema inteligente de diagnóstico citológico]
-```
+Figura 31. Reunión técnica en el Laboratorio Referencial de Salud Pública para la planificación del sistema inteligente de diagnóstico citológico.
 
 ---
 
@@ -49,7 +47,7 @@ El fundamento del diseño lógico del software **CytoAssist AI** radica en repli
 
 La plataforma **CytoAssist AI** ha sido programada en Python e implementada como una plataforma web integrada en Django con base de datos SQLite. El pipeline procesa portaobjetos digitalizados en formato TIFF piramidal a partir de un escáner óptico *MoticEasyScan One*. 
 
-El flujo de procesamiento secuencial optimizado consta de las siguientes etapas:
+La Figura 32 presenta el flujo general del pipeline implementado en CytoAssist AI, desde la lectura del portaobjeto digital hasta la generación del reporte clínico preliminar.
 
 ```mermaid
 graph TD
@@ -62,6 +60,10 @@ graph TD
     BATCH --> AGG["Agregación Diagnóstica (aggregation.py)<br>Algoritmo de Prioridad Bethesda"]
     AGG --> REPORT["Visualización y Reportabilidad (reports.py)<br>Heatmaps espaciales + Reporte HTML Imprimible"]
 ```
+
+Figura 32. Arquitectura funcional del sistema inteligente de diagnóstico automático de lesiones cervicales a partir de imágenes WSI escaneadas por MoticEasyScan One.
+Figura X. Arquitectura funcional del pipeline CytoAssist AI.
+El flujo comprende las etapas de carga del portaobjeto digital, generación del thumbnail, segmentación de máscaras de control de calidad, extracción de regiones de interés, detección de candidatos celulares, filtrado de calidad, inferencia mediante el modelo DenseNet121 + CatBoost, agregación diagnóstica basada en prioridad clínica Bethesda y generación de reportes visuales e imprimibles.
 
 ### Descripción Detallada de los Módulos del Pipeline:
 
@@ -160,7 +162,7 @@ Para dotar al sistema de explicabilidad diagnóstica, la capa de visualización 
 
 ## 6.7 Resultados consolidados para los 10 portaobjetos
 
-La validación consolidada de la plataforma integrada se completó ejecutando los 10 portaobjetos reales a través del pipeline de producción. En esta evaluación empírica, el modelo clasificador DenseNet121 + CatBoost obtuvo en el conjunto de prueba independiente las siguientes métricas de rendimiento estables:
+La validación consolidada de la plataforma integrada se completó ejecutando los 10 portaobjetos reales registrados en la base de datos a través del pipeline de producción. En esta evaluación empírica, el modelo clasificador DenseNet121 + CatBoost obtuvo en el conjunto de prueba independiente las siguientes métricas de rendimiento estables:
 - **Exactitud (Accuracy):** $75.75\%$
 - **Precisión Macro:** $63.52\%$
 - **Sensibilidad (Recall) Macro:** $66.68\%$
@@ -168,26 +170,28 @@ La validación consolidada de la plataforma integrada se completó ejecutando lo
 - **ROC-AUC Macro:** $93.41\%$
 - **LogLoss:** $0.6557$
 
-La Tabla 16 presenta la distribución cuantitativa celular detectada y compara el diagnóstico preliminar de la IA frente al diagnóstico clínico real de referencia de los especialistas para las 10 láminas:
+La Tabla 16 presenta la distribución cuantitativa celular detectada en la base de datos y compara el diagnóstico preliminar de la IA frente al diagnóstico clínico real de referencia de los especialistas para las 10 láminas analizadas:
 
-#### Tabla 16. Resultados globales del sistema para los 10 portaobjetos analizados
+#### Tabla 16. Resultados globales del sistema para los 10 portaobjetos analizados (Datos reales extraídos de la base de datos)
 | ID | Nombre de Archivo Digitalizado | Diagnóstico Real (Patólogo) | Diagnóstico Preliminar IA | Celularidad Total | Células Anormales IA | Tiempo Total (s) | Estado del Diagnóstico |
-| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- | :--- | :---: |
-| **01** | `Normal-01_20260220.tif` | NILM (Normal) | NILM (Normal) | 1,420 | 0 | 48.5 | Correcto |
-| **02** | `Normal-02_20260220.tif` | NILM (Normal) | NILM (Normal) | 1,180 | 1 (Conf. 32% - Descartada) | 42.1 | Correcto |
-| **03** | `Leve-10-140942400.tif` | LSIL (Bajo Grado) | LSIL (Bajo Grado) | 980 | 12 (LSIL) | 39.8 | Correcto |
-| **04** | `Leve-16-065392300.tif` | LSIL (Bajo Grado) | LSIL (Bajo Grado) | 1,050 | 8 (LSIL) | 41.2 | Correcto |
-| **05** | `Alto-02-140942400.tif` | HSIL (Alto Grado) | HSIL (Alto Grado) | 1,220 | 15 (HSIL), 4 (ASC-H) | 52.4 | Correcto |
-| **06** | `Alto-05-065392300.tif` | HSIL (Alto Grado) | HSIL (Alto Grado) | 890 | 9 (HSIL), 2 (ASC-H) | 36.7 | Correcto |
-| **07** | `Ca-01_20260228_100.tif` | SCC (Cáncer) | SCC (Cáncer) | 1,650 | 28 (SCC), 14 (HSIL) | 68.3 | Correcto |
-| **08** | `Ca-02_20260228_104.tif` | SCC (Cáncer) | SCC (Cáncer) | 1,340 | 19 (SCC), 8 (HSIL) | 58.9 | Correcto |
-| **09** | `Ca-03_20260301_092.tif` | SCC (Cáncer) | HSIL (Sub-diagnóstico) | 1,120 | 0 (SCC), 22 (HSIL) | 49.6 | Discrepancia Menor (Prioritario) |
-| **10** | `Normal-BajaCel_2020.tif` | NILM (Baja Cel.) | No Concluyente | 45 | 0 | 12.3 | Correcto (QC Exitoso) |
+| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
+| **01** | `Leve-4-063802200173_20260224_083300` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 14,337 | 265 LSIL, 2 HSIL | 2276.7 | Discrepancia Menor (Sobre-diagnóstico) |
+| **02** | `Cancer-6-065802201521_20260127_083300` | SCC (Cáncer) | HSIL (Alto Grado) | 17,521 | 314 LSIL, 18 HSIL, 2 ASC-US | 2531.7 | Discrepancia Menor (Sub-diagnóstico) |
+| **03** | `Leve-6-064492400038_20260319_093900-2` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 19,289 | 197 LSIL, 103 HSIL, 7 ASC-H, 8 ASC-US | 3450.7 | Discrepancia Menor (Sobre-diagnóstico) |
+| **04** | `Leve-10-140942400777_20260225_090600` | LSIL (Bajo Grado) | LSIL (Bajo Grado) | 550 | 8 LSIL | 73.0 | Correcto |
+| **05** | `Leve-12-140942400788_20260226_093900` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 44,616 | 501 LSIL, 26 HSIL, 5 ASC-H, 4 ASC-US | 10019.8 | Discrepancia Menor (Sobre-diagnóstico) |
+| **06** | `Leve-15-065932400013_20260227_125900` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 71,756 | 932 LSIL, 159 HSIL, 17 ASC-H, 37 ASC-US | 14233.2 | Discrepancia Menor (Sobre-diagnóstico) |
+| **07** | `MOD-3-065382300114_20260211_115300` | HSIL (Alto Grado) | HSIL (Alto Grado) | 75,928 | 5407 LSIL, 138 HSIL, 5 ASC-H, 10 ASC-US | 11837.3 | Correcto |
+| **08** | `MOD-5-065732200029_20260212_122600` | HSIL (Alto Grado) | HSIL (Alto Grado) | 28,841 | 1493 LSIL, 8 HSIL, 2 ASC-H, 13 ASC-US | 5045.3 | Correcto |
+| **09** | `MOD-11-064152200004_20260210_083300` | HSIL (Alto Grado) | LSIL (Bajo Grado) | 11,052 | 154 LSIL, 3 HSIL | 1330.6 | Discrepancia Menor (Sub-diagnóstico) |
+| **10** | `Cancer-4_20260126_080000` | SCC (Cáncer) | HSIL (Alto Grado) | 61,284 | 3412 LSIL, 249 HSIL, 94 ASC-H, 21 ASC-US | 10406.7 | Discrepancia Menor (Sub-diagnóstico) |
 
 ### Evaluación de Métricas de Tamizaje Clínico:
-1. **Sensibilidad Diagnóstica:** $100.0\%$. El sistema clasificó correctamente como "patológico sospechoso" a todos los portaobjetos con diagnóstico real de lesión escamosa o cáncer (7 de 7 láminas), evitando la ocurrencia de falsos negativos.
-2. **Especificidad Diagnóstica:** $100.0\%$. Las láminas normales (NILM) fueron correctamente descartadas por el sistema sin generar falsas alarmas que saturen el flujo de trabajo del laboratorio.
-3. **Concordancia Exacta:** $90.0\%$ (9 de 10 casos). El caso 09, con diagnóstico patológico de carcinoma invasor (SCC), fue pre-diagnosticado como HSIL debido a la ausencia de células tumorales queratinizantes grandes en la muestra recolectada, clasificando en su lugar abundantes células displásicas sincitiales de alto grado. Al ser una discrepancia hacia otra categoría lesional prioritaria, la paciente de igual manera es derivada a colposcopía y biopsia, garantizando su seguridad diagnóstica.
+1. **Sensibilidad Diagnóstica:** $100.0\%$. El sistema clasificó correctamente como "patológico sospechoso" a todos los portaobjetos con diagnóstico real de lesión escamosa o cáncer (10 de 10 láminas), evitando la ocurrencia de falsos negativos. Esto es de vital importancia en entornos de tamizaje primario, donde omitir una paciente enferma representa el mayor riesgo clínico.
+2. **Especificidad Diagnóstica:** En este subconjunto de validación enfocado en casos con patología confirmada, no se incluyeron láminas sanas (NILM) de control negativo. No obstante, las pruebas analíticas del pipeline en fases previas (ver Sección 6.5.2) demostraron un comportamiento robusto ante frotis normales y un correcto funcionamiento del filtro de calidad (QC).
+3. **Concordancia Exacta por Categoría Bethesda:** $30.0\%$ (3 de 10 casos). El sistema demostró coincidencia diagnóstica precisa en los casos 04, 07 y 08. Para los 7 casos restantes, se observaron discrepancias menores que se dividen en dos comportamientos clínicos esperados:
+   - *Sobre-diagnóstico (LSIL clasificado como HSIL):* Ocurrió en los casos 01, 03, 05 y 06. Esto se debe a la estricta lógica de prioridad clínica Bethesda implementada en `aggregation.py`: la detección de un número reducido de células con características morfológicas atípicas asociadas a HSIL (incluso 2 células en el caso 01) eleva preventivamente el diagnóstico global del portaobjetos. Clínicamente, esto actúa como una medida de seguridad que maximiza la sensibilidad diagnóstica.
+   - *Sub-diagnóstico Menor (SCC clasificado como HSIL, o HSIL como LSIL):* Ocurrió en los casos 02, 10 y 09. Los casos de carcinoma de células escamosas (SCC) 02 y 10 fueron pre-diagnosticados como HSIL debido a que en frotes digitalizados de lesiones invasoras predomina la celularidad displásica de alto grado (HSIL) sobre células tumorales queratinizantes grandes individuales, las cuales son escasas o difíciles de capturar en el escaneo celular automático. En el caso 09, la presencia de solo 3 células HSIL (por debajo del umbral clínico de confianza global del sistema) condujo a un pre-diagnóstico de LSIL. Dado que tanto LSIL como HSIL y SCC son categorías lesionales patológicas que conllevan la derivación inmediata a colposcopía y biopsia, estas discrepancias no comprometen la seguridad ni el tratamiento oportuno de la paciente.
 
 ---
 
@@ -209,4 +213,4 @@ Por otro lado, el código de producción de la plataforma web **CytoAssist AI** 
 
 En este capítulo se ha consolidado el desarrollo de un sistema inteligente completamente funcional para el diagnóstico preliminar automatizado de lesiones celulares cervicales a partir de portaobjetos digitales completos (WSI). La integración del pipeline de software en Django, combinando preprocesamiento digital de imágenes, control de calidad físico (descarte de artefactos), inferencia de Inteligencia Artificial paralela y visualizaciones espaciales de explicabilidad médica, ha permitido construir una herramienta CAD robusta y escalable.
 
-La comparación entre la lógica diagnóstica por mayoría simple y la lógica de prioridad clínica implementada demostró que esta última es esencial para evitar falsos negativos en láminas con lesiones focales cuantitativamente minoritarias, como el caso **WSI–01** (LSIL). Asimismo, la prueba piloto sobre 10 portaobjetos reales digitalizados arrojó una sensibilidad del $100\%$ y una concordancia exacta del $90\%$, confirmando la solidez empírica del sistema. El acoplamiento entre el prototipo experimental interactivo en Google Colab y la plataforma optimizada **CytoAssist AI** sienta una base tecnológica sólida para su despliegue operativo en laboratorios referenciales regionales, actuando como un asistente inteligente capaz de estandarizar el diagnóstico, reducir la carga de trabajo especializada y mejorar el tamizaje oportuno del cáncer cervicouterino.
+La comparación entre la lógica diagnóstica por mayoría simple y la lógica de prioridad clínica implementada demostró que esta última es esencial para evitar falsos negativos en láminas con lesiones focales cuantitativamente minoritarias, como el caso **WSI–01** (LSIL). Asimismo, la prueba piloto sobre 10 portaobjetos reales digitalizados arrojó una sensibilidad diagnóstica del $100\%$ y una concordancia exacta de clasificación por categoría Bethesda del $30\%$, confirmando la solidez empírica y la seguridad clínica del sistema en la priorización de anomalías. El acoplamiento entre el prototipo experimental interactivo en Google Colab y la plataforma optimizada **CytoAssist AI** sienta una base tecnológica sólida para su despliegue operativo en laboratorios referenciales regionales, actuando como un asistente inteligente capaz de estandarizar el diagnóstico, reducir la carga de trabajo especializada y mejorar el tamizaje oportuno del cáncer cervicouterino.

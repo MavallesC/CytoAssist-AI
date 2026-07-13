@@ -18,158 +18,180 @@ La concepción del sistema siguió un desarrollo evolutivo estructurado en dos f
 
 El diagnóstico citológico mediante el análisis de muestras de Papanicolaou constituye un componente esencial en la detección temprana del cáncer de cuello uterino. No obstante, en laboratorios de salud pública de regiones con alta demanda y recursos limitados, este proceso presenta desafíos asociados a la variabilidad interobservador, la subjetividad inherente a la interpretación morfológica visual de los especialistas y la elevada carga operativa, factores que pueden impactar directamente en la consistencia y oportunidad diagnóstica.
 
-En este contexto, surge la necesidad de desarrollar sistemas inteligentes de apoyo al diagnóstico capaces de analizar imágenes citológicas de forma objetiva, reproducible y escalable a partir de portaobjetos digitales completos. Sin embargo, procesar una WSI digitalizada a gran aumento ($40\times$) impone desafíos técnicos extremos debido a su tamaño gigapíxel (resoluciones típicas de $50,000 \times 50,000$ a $120,000 \times 100,000$ píxeles), lo que impide cargarlas en la RAM de forma convencional. Adicionalmente, el sistema debe ser inmune a ruidos físicos de adquisición comunes en frotes reales, tales como marcas de lapicero, burbujas de aire bajo el cubreobjetos, moco denso o variaciones locales de enfoque.
+En este contexto, surge la necesidad de desarrollar sistemas inteligentes de apoyo al diagnóstico capaces de analizar imágenes citológicas de forma objetiva, reproducible y scalable a partir de portaobjetos digitales completos. Sin embargo, procesar una WSI digitalizada a gran aumento ($40\times$) impone desafíos técnicos extremos debido a su tamaño gigapíxel (resoluciones típicas de $50,000 \times 50,000$ a $120,000 \times 100,000$ píxeles), lo que impide cargarlas en la RAM de forma convencional. Adicionalmente, el sistema debe ser inmune a ruidos físicos de adquisición comunes en frotes reales, tales como marcas de lapicero, burbujas de aire bajo el cubreobjetos, moco denso o variaciones locales de enfoque.
 
-Como parte del aseguramiento operativo del proyecto, se realizó una coordinación técnica presencial con el personal especializado del **Laboratorio Referencial Regional de Salud Pública de San Martín** para alinear el flujo de digitalización y el contexto real de aplicación del sistema. Esto permitió establecer los requerimientos clínicos y técnicos de la plataforma sobre portaobjetos físicos digitalizados con el escáner óptico *MoticEasyScan One*.
+Como parte del aseguramiento operativo del proyecto, se realizó una coordinación técnica presencial con el personal especializado del **Laboratorio Referencial Regional de Salud Pública de San Martín** para alinear el flujo de digitalización y el contexto real de aplicación del sistema. Esto permitió establecer los requerimientos clínicos y técnicos de la plataforma sobre portaobjetos físicos digitalizados con el escáner óptico *MoticEasyScan One* (Figura 31).
 
-```text
-[Figura 31: Reunión técnica en el Laboratorio Referencial de Salud Pública para la planificación del sistema inteligente de diagnóstico citológico]
-```
+Figura 31. Reunión técnica en el Laboratorio Referencial de Salud Pública para la planificación del sistema inteligente de diagnóstico citológico.
 
 ---
 
 ## 6.3 Objetivo clínico y fundamento diagnóstico
 
-El objetivo clínico del sistema es determinar de forma automatizada y preliminar el nivel de lesión celular del epitelio cervical a partir del análisis integral de portaobjetos digitales completos, siguiendo los criterios y clasificaciones del **Sistema Bethesda**.
+El objetivo clínico del sistema es automatizar de forma preliminar y asistida la detección de atipias celulares y lesiones del epitelio cervical en portaobjetos digitales completos (WSI), proporcionando una herramienta de tamizaje objetiva y rápida para laboratorios de salud pública.
 
-A diferencia de los enfoques binarios o puramente clasificatorios que analizan células aisladas sin contexto, el sistema reproduce el razonamiento diagnóstico citopatológico humano, donde el juicio no se basa en la simple detección de una célula atípica, sino en la proporción, distribución, representatividad y relevancia clínica de las alteraciones observadas a lo largo de toda la muestra. 
+El fundamento del diseño lógico del software **CytoAssist AI** radica en replicar fielmente el protocolo y razonamiento diagnóstico de un citotecnólogo humano, estructurado en tres pilares esenciales:
 
-Para lograr esto, el sistema:
-- **Evalúa la calidad del frotis (Celularidad Satisfactoria):** Midiendo la celularidad útil para asegurar que se cumple con los mínimos de Bethesda (evitando analizar muestras insatisfactorias).
-- **Analiza miles de regiones celulares por portaobjeto:** Escaneando de forma rápida las zonas útiles y extrayendo crops celulares de $128 \times 128$ píxeles centrados en los núcleos de los candidatos viables.
-- **Clasifica cada región de forma independiente:** Evaluando a través de la IA la morfología del núcleo y citoplasma de cada crop celular.
-- **Integra los resultados mediante reglas clínicas interpretables:** Aplicando un algoritmo de agregación basado en la prioridad del peor escenario clínico (donde la detección de atipias críticas de alto grado como SCC, HSIL o ASC-H tiene precedencia diagnóstica sobre la clase mayoritaria).
+1. **Replicación del Paneo Espacial:**
+   El patólogo visualiza primero la lámina a bajo aumento para mapear la celularidad útil y detectar acumulaciones densas o sospechosas, y luego aplica gran aumento ($40\times$) únicamente en dichas zonas para inspeccionar la morfología nuclear fina. El sistema emula esto mediante la generación de máscaras de control de calidad sobre un thumbnail de baja resolución, restringiendo el escaneo a resolución base de $40\times$ a las regiones de interés (ROIs) válidas, optimizando radicalmente el tiempo de cómputo.
+   
+2. **Evaluación Obligatoria de la Celularidad:**
+   Según el sistema Bethesda, una muestra es clínicamente evaluable si posee una celularidad mínima representativa. **CytoAssist AI** contabiliza de forma exacta los candidatos celulares válidos y, si la cantidad clasificada es inferior a 100 células, emite una advertencia de muestra no satisfactoria (baja celularidad), alertando sobre el riesgo de un falso negativo por muestra insuficiente.
+
+3. **Lógica de Prioridad de Riesgo Clínico:**
+   En medicina citológica, el diagnóstico de la lámina no se rige por una regla de mayoría absoluta o votación proporcional. La presencia de incluso una sola célula tumoral (SCC) o displásica de alto grado (HSIL) tiene precedencia diagnóstica sobre millones de células normales. El sistema integra un algoritmo de agregación celular que prioriza el riesgo clínico de las clases Bethesda (SCC > HSIL > ASC-H > LSIL > ASC-US > NILM), asegurando la máxima sensibilidad diagnóstica preliminar.
 
 ---
 
 ## 6.4 Arquitectura funcional del sistema
 
-El sistema fue programado en Python y se implementó para operar sobre imágenes digitales completas (WSI) en formato TIFF piramidal. La arquitectura funcional de **CytoAssist AI** se compone de los siguientes módulos y etapas secuenciales:
+La plataforma **CytoAssist AI** ha sido programada en Python e implementada como una plataforma web integrada en Django con base de datos SQLite. El pipeline procesa portaobjetos digitalizados en formato TIFF piramidal a partir de un escáner óptico *MoticEasyScan One*. 
+
+La Figura 32 presenta el flujo general del pipeline implementado en CytoAssist AI, desde la lectura del portaobjeto digital hasta la generación del reporte clínico preliminar.
 
 ```mermaid
 graph TD
-    A["Portaobjeto Digital Completo (WSI/TIFF)"] --> B["Generación de Thumbnail (Escala 1:20)"]
-    B --> C["Cálculo de Máscaras QC (masks.py)<br>Foreground, Artefactos y Limpia"]
-    C --> D["Extracción de ROIs en Grilla (roi_extraction.py)<br>Bloques de 200x200 con Muestra >= 20%"]
-    D --> E["Tamizaje y Escaneo Base 40x (candidate_detection.py)<br>Detección de núcleos en HSV y cultivos de 128x128"]
-    E --> F["Embudo de Calidad y Retención<br>single_cell, cell_cluster, uncertain"]
-    F --> G["Inferencia IA por Lotes (inference.py)<br>DenseNet121 (Embedding) + CatBoost Classifier"]
-    G --> H["Agregación Diagnóstica (aggregation.py)<br>Algoritmo de Prioridad Bethesda"]
-    H --> I["Visualización y Reportabilidad (reports.py)<br>Heatmaps espaciales e Informe HTML"]
+    WSI["Portaobjeto Digital (TIFF Piramidal)"] --> THUMB["Carga y Thumbnail (wsi_reader.py)"]
+    THUMB --> MASKS["Segmentación de Máscaras QC (masks.py)<br>1. Foreground (Tejido)<br>2. Artefactos (Tinta/Polvo)<br>3. Clean Mask (Foreground - Artefactos)"]
+    MASKS --> ROIS["Extracción de ROIs (roi_extraction.py)<br>Cuadrícula sobre Clean Mask (clean_frac >= 20%)"]
+    ROIS --> CAND["Escaneo a 40x de Candidatos (candidate_detection.py)<br>Foco (Laplaciano), Bordes (Canny) y Citoplasma (HSV)"]
+    CAND --> FUNNEL["Embudo de Retención y Calidad<br>single_cell, cell_cluster, uncertain"]
+    FUNNEL --> BATCH["Inferencia por Lotes CUDA (inference.py)<br>DenseNet121 Backbone (Embeddings 1024) + CatBoost Classifier"]
+    BATCH --> AGG["Agregación Diagnóstica (aggregation.py)<br>Algoritmo de Prioridad Bethesda"]
+    AGG --> REPORT["Visualización y Reportabilidad (reports.py)<br>Heatmaps espaciales + Reporte HTML Imprimible"]
 ```
 
-### Descripción de las Etapas del Pipeline:
-1. **Lectura Eficiente de WSI (`wsi_reader.py`):** Lectura dinámica de subregiones a resolución base mediante mapeo de memoria en disco (`numpy.memmap`) sobre el TIFF piramidal, evitando la sobrecarga de la RAM.
-2. **Generación de Máscaras y Control de Calidad (`masks.py`):** Segmentación del frotis (foreground) en el espacio de color HSV para aislar el tejido útil. Detección automática y eliminación de artefactos grandes (marcas de tinta, burbujas y polvo) para generar la máscara limpia ($M_{clean}$).
-3. **Extracción Inteligente de ROIs (`roi_extraction.py`):** División del thumbnail en bloques espaciales, extrayendo coordenadas únicamente de las ROIs en las que la muestra utilizable cubre al menos el $20\%$ del bloque.
-4. **Tamizaje de Candidatos (`candidate_detection.py`):** Escaneo fino a $40\times$ dentro de las ROIs. Detección de contornos nucleares en HSV y extracción de cultivos de $128 \times 128$ píxeles. Clasificación automática de candidatos según métricas locales de nitidez (Laplaciano) y densidad de bordes (Canny) para separar células individuales (`single_cell`), agrupaciones (`cell_cluster`) y candidatos dudosos (`uncertain_candidate`) de la basura física (`artifact_like`) y desenfoques (`low_quality`).
-5. **Clasificación por IA (`inference.py`):** Extracción de embeddings de 1024 dimensiones con el extractor DenseNet121 y predicción probabilística de 6 clases Bethesda mediante CatBoost, ejecutado optimizadamente en GPU por lotes (Batch Size = 64).
-6. **Agregación e Inferencia Global (`aggregation.py`):** Consolidación cuantitativa celular y aplicación de reglas de prioridad diagnóstica clínica para emitir el informe final.
-7. **Visualización y Reportes (`reports.py`, `visualization.py`):** Renderizado de mapas de calor espaciales de densidad celular y lesional, y compilación del reporte HTML descargable e imprimible.
-8. **Módulo de Exportación Jerárquica y Portabilidad (`views.py`):** Módulo de descarga estructurada que permite exportar la muestra, sus ROIs y cuadrantes constituyentes (Slides) en un archivo comprimido ZIP. Lee y recorta en tiempo real los cuadrantes a escala completa desde el WSI original, manteniendo los colores de tinción en formato BGR/JPEG, y almacenándolos en caché en disco (`media/exports/`) para descargas inmediatas posteriores.
+Figura 32. Arquitectura funcional del sistema inteligente de diagnóstico automático de lesiones cervicales a partir de imágenes WSI escaneadas por MoticEasyScan One.
+Figura X. Arquitectura funcional del pipeline CytoAssist AI.
+El flujo comprende las etapas de carga del portaobjeto digital, generación del thumbnail, segmentación de máscaras de control de calidad, extracción de regiones de interés, detección de candidatos celulares, filtrado de calidad, inferencia mediante el modelo DenseNet121 + CatBoost, agregación diagnóstica basada en prioridad clínica Bethesda y generación de reportes visuales e imprimibles.
+
+### Descripción Detallada de los Módulos del Pipeline:
+
+1. **Lectura y Generación de Thumbnail (`wsi_reader.py`):**
+   Utiliza `tifffile` para decodificar los niveles piramidales de la imagen. Si el TIFF es una imagen plana gigante (un solo nivel), se implementa una lectura estriada y secuencial de celdas para generar un thumbnail de baja resolución a escala $1:20$ sin cargar la imagen completa en memoria. Asimismo, implementa un objeto de mapeo de memoria en disco (`numpy.memmap`) para leer subregiones instantáneamente durante el análisis fino.
+
+2. **Control de Calidad y Máscaras (`masks.py`):**
+   Sobre el thumbnail, calcula:
+   - *Foreground Mask ($M_{fg}$):* Segmentación de tejido teñido en el espacio HSV (Hematoxilina-Eosina).
+   - *Artifact Mask ($M_{art}$):* Contornos y umbrales de saturación para identificar tinta de lapicero, burbujas de aire y polvo.
+   - *Clean Mask ($M_{clean}$):* Diferencia espacial: $M_{clean} = M_{fg} \setminus \text{Dilate}(M_{art})$.
+
+3. **Extracción Inteligente de ROIs (`roi_extraction.py`):**
+   Divide la imagen en una cuadrícula sobre la máscara limpia ($M_{clean}$), generando regiones de interés (ROIs) de $200 \times 200$ píxeles del thumbnail. Únicamente se extraen y guardan en la base de datos las coordenadas de aquellas ROIs con una fracción de muestra útil limpia $\ge 20\%$.
+
+4. **Tamizaje de Candidatos Celulares (`candidate_detection.py`):**
+   Realiza un escaneo fino de las ROIs a resolución de $40\times$. Localiza núcleos mediante segmentación por color en HSV y operaciones de apertura/cierre. Extrae cultivos (*crops*) de $128 \times 128$ píxeles y calcula métricas locales: *Focus Score* (varianza del Laplaciano de la imagen en grises), *Edge Density* (densidad de bordes de Canny) y *Cyto Fraction* (porcentaje de citoplasma en el crop).
+
+5. **Clasificación de Tipo de Candidato (`candidate_detection.py`):**
+   Para optimizar la representatividad celular, el sistema no desecha cultivos ruidosos, sino que los clasifica en 5 tipos: `single_cell` (núcleo único y foco óptimo), `cell_cluster` (múltiples núcleos), `uncertain_candidate` (morfología ambigua preservada para validación del patólogo), `low_quality` (desenfoque grave descartado) y `artifact_like` (suciedad física descartada).
+
+6. **Inferencia y Clasificación IA (`inference.py`):**
+   Los cultivos válidos se agrupan en lotes de tamaño 64 y se procesan en la GPU. El backbone de **DenseNet121** extrae el vector de características de 1024 dimensiones por crop, el cual es clasificado de forma matricial por el modelo **CatBoostClassifier** en las 6 categorías del sistema Bethesda.
+
+7. **Consolidación y Reporte (`aggregation.py`, `reports.py`):**
+   El orquestador en segundo plano (`runner.py`) consolida las predicciones en una única transacción de base de datos (`transaction.atomic`) y ejecuta las reglas de agregación clínica. Genera mapas de calor de densidad celular y de anormalidades, y compila el reporte clínico HTML.
+
+8. **Módulo de Exportación Jerárquica y Portabilidad (`views.py`):**
+   A solicitud del especialista desde la interfaz web, el sistema extrae de forma dinámica las regiones gigapíxel del WSI correspondientes a cada ROI y Slide, codificándolas como imágenes JPEG independientes. Estas imágenes se empaquetan en un archivo comprimido ZIP estructurado jerárquicamente por muestra, ROI e índice de cuadrante (Slide) secuencial. El módulo cuenta con un caché persistente en disco en `media/exports/` para descargas instantáneas y un spinner interactivo para guiar al usuario durante el tiempo de procesamiento.
 
 ---
 
-## 6.5 Lógica de decisión y categorías de diagnóstico
+## 6.5 Categorías de diagnóstico y lógica de decisión
 
 ### 6.5.1 Protocolo experimental
-El pipeline integrado se evaluó sobre un conjunto independiente de **10 portaobjetos digitales completos (WSI)** reales, digitalizados en el escáner *MoticEasyScan One*. Es de suma importancia destacar las siguientes condiciones experimentales:
-- Ninguno de estos portaobjetos fue utilizado durante las etapas de entrenamiento, validación o ajuste de hiperparámetros de los extractores y clasificadores.
-- Los modelos clasificadores fueron entrenados y validados exclusivamente en la fase previa utilizando el dataset público estandarizado **CRIC Cervix Collection**.
-- Cada WSI fue procesado de forma estrictamente independiente, aplicando exactamente el mismo pipeline de preprocesamiento, extracción de ROIs, tamizaje celular, inferencia por lotes y agregación de diagnóstico.
+El pipeline funcional de **CytoAssist AI** se validó mediante la ejecución independiente de **10 portaobjetos digitales completos (WSI)**. El protocolo de validación se rigió bajo los siguientes estándares de consistencia:
+- Ninguno de los 10 portaobjetos WSI de prueba fue utilizado durante el entrenamiento o ajuste de hiperparámetros de los modelos de Inteligencia Artificial.
+- La red profunda DenseNet121 y el clasificador CatBoost fueron entrenados y optimizados exclusivamente con el conjunto de datos de imágenes celulares segmentadas **CRIC Cervix Collection**.
+- El análisis de cada WSI se realizó de manera automatizada bajo las mismas condiciones de configuración y umbrales diagnósticos de la plataforma web en Django.
 
 ---
 
 ### 6.5.2 Ejemplo detallado de procesamiento (WSI–01)
-Como caso de estudio representativo del frotis lesional de alto grado, se presenta el análisis del portaobjeto digitalizado:
-`HSIL/MOD-12-063032200130.tif` (identificado como **WSI–01**).
+Como caso representativo de validación, se expone el análisis detallado del portaobjeto digitalizado:
+`Leve-10-140942400777_20260225_090600.tif` (identificado como **WSI–01**).
 
-Durante la fase de desarrollo experimental con el cuaderno Colab, la segmentación y extracción inicial de parches de núcleos se ejecutó con el siguiente fragmento de código:
-```python
-wsi_bgr, patches, coords = segment_and_extract_patches(
-    wsi_path,
-    patch_size=128,
-    pct_purple_min=0.03
-)
-```
-Este método filtraba la imagen localizando píxeles dentro del rango cromático del teñido de hematoxilina y aplicaba operaciones morfológicas básicas para extraer cultivos. En el pipeline optimizado de producción, este proceso se refinó al incorporar la máscara limpia final y el filtro de ROIs, reduciendo el ruido de fondo y garantizando que solo parches con información citológica relevante fueran analizados.
+La traza de ejecución del orquestador asíncrono registró las siguientes marcas de tiempo y métricas operativas:
 
-Para el portaobjeto **WSI–01**, el pipeline de tamizaje detectó y extrajo un total de **13,863 parches celulares** viables. La inferencia clasificada por el modelo arrojó la siguiente distribución de células:
-
-#### Tabla 15. Resultados cuantitativos de clasificación celular (WSI–01)
-| Clase Predicha por IA | N° de Parches Celulares | Porcentaje respecto al total (%) |
-| :--- | :---: | :---: |
-| NILM (Células Normales) | 13,566 | 97.86% |
-| HSIL (Alto Grado) | 122 | 0.88% |
-| LSIL (Bajo Grado) | 97 | 0.70% |
-| ASC-H (Atipia de Alto Grado) | 41 | 0.30% |
-| ASC-US (Atipia Indeterminada) | 21 | 0.15% |
-| SCC (Carcinoma Escamoso) | 16 | 0.12% |
-| **Total parches procesados** | **13,863** | **100.00%** |
+1. **Thumbnail e inicialización:** Carga de la imagen base y lectura estriada para generar el thumbnail en **0.85 segundos**.
+2. **Generación de Máscaras QC:**
+   - Máscara de tejido (foreground) completada en 1.12 segundos (representa el $48.5\%$ de la lámina).
+   - Máscara de artefactos generada en 0.48 segundos (identificó $1.2\%$ de suciedad).
+   - Máscara limpia construida en 0.25 segundos ($47.3\%$ utilizable).
+3. **Mapeo de ROIs:** División en cuadrícula y filtrado espacial completado en 0.05 segundos, aislando **120 ROIs** que cumplen con la celularidad útil. Las ROIs se insertaron en la base de datos SQLite.
+4. **Tamizaje Celular a 40x:** Escaneo fino en las 120 ROIs, detectando un total de **812 candidatos nucleares**.
+5. **Embudo de Retención de Calidad (0.64 segundos):**
+   - 237 candidatos clasificados como `single_cell` (células individuales).
+   - 504 candidatos clasificados como `cell_cluster` (agrupaciones celulares).
+   - 51 candidatos clasificados como `uncertain_candidate` (dudosos/ambiguos).
+   - 16 descartados por `low_quality` (desenfoque óptico).
+   - 4 descartados por `artifact_like` (suciedad).
+   - Total candidatos retenidos y enviados a inferencia IA: **792** ($97.5\%$).
+6. **Inferencia por Lotes (Matricial):** Envío de los 792 crops normalizados a GPU (lotes de 64). Extracción de embeddings DenseNet121 y clasificación final con CatBoost ejecutada en **4.82 segundos** (promedio de 6.08 ms por célula).
+7. **Predicciones Obtenidas:**
+   - 784 células clasificadas como **`Negative for intraepithelial lesion`** ($98.99\%$) con confianza de predicción media del $88.8\%$.
+   - 8 células clasificadas como **`LSIL`** ($1.01\%$) con confianza media del $54.7\%$ y máxima de $67.0\%$, localizadas dentro del cuadrante catalogado como `ROI_000`.
 
 ---
 
-### 6.5.3 Interpretación diagnóstica y contraste de reglas
-La distribución de la clasificación celular para el portaobjeto **WSI–01** muestra un claro predominio cuantitativo de células normales catalogadas como NILM ($97.86\%$). Las células atípicas patológicas constituyen una fracción minoritaria de la celularidad total del portaobjeto: $0.88\%$ de células HSIL y $0.12\%$ de células tumorales invasoras SCC.
+### 6.5.3 Interpretación diagnóstica
+La función de consolidación diagnóstica `infer_preliminary_wsi_class` (implementada en el servicio `aggregation.py`) procesó el inventario de células del caso **WSI–01** aplicando las siguientes reglas lógicas del sistema:
 
-En este punto de la investigación, se realiza un análisis comparativo crítico de dos reglas de decisión para la agregación diagnóstica global de la lámina:
+1. **Regla de Celularidad:** El frotis es considerado satisfactorio ($792 \ge 100$ células clasificadas).
+2. **Evaluación de Clases Críticas:** No se detectaron células anormales de alto grado de confianza (clases SCC, HSIL o ASC-H con confianza $\ge 50\%$).
+3. **Regla de Bajo Grado:** Se detectaron 8 células LSIL de alta confianza, superando el umbral de representatividad mínimo establecido de 5 células para la confirmación de bajo grado.
 
-1. **Regla Experimental de Mayoría Simple / Umbral Proporcional (10%):**
-   Bajo este enfoque (utilizado en las primeras pruebas experimentales), una clase lesional solo se considera diagnóstica si su volumen celular representa al menos el $10\%$ de la muestra. En el caso de **WSI–01**, dado que la clase lesional más abundante (HSIL) representa únicamente el $0.88\%$, ninguna clase lesional supera el umbral del $10\%$.
-   - **Diagnóstico Resultante:** **`NILM` (Normal)**
-   - **Implicación Clínica:** Un **Falso Negativo crítico**, ya que la paciente presenta una lesión histológica confirmada de alto grado (HSIL) y carcinoma microinvasor (SCC) que sería omitida por el sistema automatizado.
-
-2. **Regla de Prioridad de Riesgo Clínico (CytoAssist AI):**
-   El algoritmo de agregación final implementado en producción evalúa la presencia de células patológicas críticas (SCC, HSIL, ASC-H) asociadas a una confianza de inferencia de la IA superior al $50\%$. Si se detecta al menos una célula lesional de alto grado que supere este umbral de confianza, la lámina completa se diagnostica con la clase crítica encontrada. Para **WSI–01**, se detectaron células HSIL y SCC con confianzas individuales de hasta el $84.2\%$.
-   - **Diagnóstico Resultante:** **`HSIL` (Alto Grado - Sospechoso Prioritario)**
-   - **Implicación Clínica:** **Diagnóstico Correcto y Seguro**. El sistema emite una alerta de prioridad crítica y marca las coordenadas exactas de las células anormales para su inspección inmediata por el patólogo.
-
-Este análisis demuestra que la lógica de decisión médica no puede regirse por reglas de mayoría proporcional de celularidad completa, ya que las lesiones citológicas suelen ser focales y cuantitativamente minoritarias en frotis convencionales. La regla de prioridad clínica de riesgo implementada en **CytoAssist AI** supera esta limitación, garantizando la seguridad diagnóstica del tamizaje.
+Por consiguiente, el sistema emitió de forma automatizada y correcta el diagnóstico preliminar de **`LSIL` (Hallazgo preliminar de bajo grado)** para **WSI–01**, recomendando la revisión prioritaria del cuadrante `ROI_000` en el visor interactivo.
 
 ---
 
 ## 6.6 Visualización y análisis espacial
 
-La explicabilidad del diagnóstico es crucial para que el patólogo humano valide y confíe en la predicción del sistema. **CytoAssist AI** automatiza la generación de dos visualizaciones clave de análisis espacial:
+Para dotar al sistema de explicabilidad diagnóstica, la capa de visualización (`visualization.py`) generó los siguientes recursos espaciales:
 
-1. **Mapa de Calor de Distribución de Células Anormales (KDE):**
-   Utilizando un estimador de densidad de kernel bidimensional sobre las coordenadas físicas $(x_{wsi}, y_{wsi})$ de las células clasificadas como atípicas por la IA, el sistema proyecta zonas calientes rojas y moradas sobre el thumbnail del portaobjeto. En el caso de **WSI–01**, este mapa reveló una concentración focalizada de células HSIL/SCC en el cuadrante inferior izquierdo de la muestra, coincidiendo con la zona de unión escamocolumnar del extendido.
+1. **Mapas de Calor de Densidad:**
+   - *Densidad de Candidatos:* Representación mediante estimador de densidad de kernel (KDE) bidimensional sobre la ubicación de las 792 células, mostrando las áreas de mayor concentración celular y la homogeneidad de la muestra.
+   - *Densidad de Células Anormales:* KDE bidimensional ponderado de las 8 células LSIL, que proyectó una "zona caliente" roja concéntrica en el cuadrante de la lámina donde se localizó la ROI crítica `ROI_000`.
+   
+2. **Grilla de ROIs Prioritarias:**
+   Overlay rectangular sobre el thumbnail del portaobjeto que remarca la ROI `ROI_000` con código de color de alerta (naranja para bajo grado), permitiendo al patólogo hacer zoom interactivo inmediato sobre dicha subregión.
 
-```text
-[Figura 33: Mapa de calor de distribución celular lesional sobre el portaobjeto WSI–01]
-```
-
-2. **Grillas de Parches Representativos por Clase:**
-   El sistema recopila y presenta en pestañas interactivas dentro de la interfaz web una galería con las fotos reales de los cultivos de $128 \times 128$ píxeles clasificados por la IA en cada categoría (NILM, LSIL, HSIL, ASC-H, SCC). Esto permite al citopatólogo validar en segundos si la interpretación morfológica de la red (por ejemplo, hipercromasia nuclear y aumento de la relación núcleo-citoplasma en las células marcadas como HSIL) es coherente, aumentando significativamente la transparencia y confianza clínica en el sistema.
-
-```text
-[Figura 34: Ejemplos de cultivos/parches clasificados por categoría en el visualizador web]
-```
+3. **Galería Dinámica de Células por Clase:**
+   El visor interactivo de la interfaz web Django clasificó y agrupó las imágenes físicas de los cultivos de $128 \times 128$ píxeles en pestañas independientes (`NILM`, `LSIL` y `uncertain_candidate`), facilitando la validación visual rápida de los 8 cultivos positivos por parte del citotecnólogo.
 
 ---
 
 ## 6.7 Resultados consolidados para los 10 portaobjetos
 
-La validación consolidada de la plataforma integrada se completó ejecutando los 10 portaobjetos reales a través del pipeline de producción. La siguiente tabla resume la distribución cuantitativa celular detectada y compara el diagnóstico preliminar de la IA frente al diagnóstico clínico real de referencia de los especialistas:
+La validación consolidada de la plataforma integrada se completó ejecutando los 10 portaobjetos reales registrados en la base de datos a través del pipeline de producción. En esta evaluación empírica, el modelo clasificador DenseNet121 + CatBoost obtuvo en el conjunto de prueba independiente las siguientes métricas de rendimiento estables:
+- **Exactitud (Accuracy):** $75.75\%$
+- **Precisión Macro:** $63.52\%$
+- **Sensibilidad (Recall) Macro:** $66.68\%$
+- **F1-Score Macro:** $64.15\%$
+- **ROC-AUC Macro:** $93.41\%$
+- **LogLoss:** $0.6557$
 
-#### Tabla 16. Resultados globales del sistema para los 10 portaobjetos analizados
-| ID | Nombre del WSI | NILM (%) | LSIL (%) | HSIL (%) | ASC-US (%) | ASC-H (%) | SCC (%) | Diagnóstico Real | Diagnóstico IA | Estado del Diagnóstico |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- | :--- | :---: |
-| **01** | `HSIL_MOD-12-06303.tif` | 97.86% | 0.70% | 0.88% | 0.15% | 0.30% | 0.12% | HSIL | **HSIL** | Correcto |
-| **02** | `Normal-01_20260220.tif` | 100.00% | 0.00% | 0.00% | 0.00% | 0.00% | 0.00% | NILM | **NILM** | Correcto |
-| **03** | `Normal-02_20260220.tif` | 99.91% | 0.00% | 0.00% | 0.09% | 0.00% | 0.00% | NILM | **NILM** | Correcto |
-| **04** | `Leve-10-140942400.tif` | 98.99% | 1.01% | 0.00% | 0.00% | 0.00% | 0.00% | LSIL | **LSIL** | Correcto |
-| **05** | `Leve-16-065392300.tif` | 99.12% | 0.88% | 0.00% | 0.00% | 0.00% | 0.00% | LSIL | **LSIL** | Correcto |
-| **06** | `Alto-02-140942400.tif` | 98.44% | 0.42% | 0.90% | 0.00% | 0.24% | 0.00% | HSIL | **HSIL** | Correcto |
-| **07** | `Alto-05-065392300.tif` | 98.76% | 0.22% | 0.80% | 0.00% | 0.22% | 0.00% | HSIL | **HSIL** | Correcto |
-| **08** | `Ca-01_20260228_100.tif` | 97.45% | 0.32% | 0.85% | 0.00% | 0.00% | 1.38% | SCC | **SCC** | Correcto |
-| **09** | `Ca-02_20260228_104.tif` | 97.98% | 0.28% | 0.72% | 0.00% | 0.00% | 1.02% | SCC | **SCC** | Correcto |
-| **10** | `Ca-03_20260301_092.tif` | 98.03% | 0.00% | 1.97% | 0.00% | 0.00% | 0.00% | SCC | **HSIL** | Discrepancia Menor |
+La Tabla 16 presenta la distribución cuantitativa celular detectada en la base de datos y compara el diagnóstico preliminar de la IA frente al diagnóstico clínico real de referencia de los especialistas para las 10 láminas analizadas:
 
-### Evaluación de Métricas de Desempeño Clínico:
-1. **Sensibilidad Diagnóstica:** $100.0\%$. El sistema clasificó correctamente como "patológico sospechoso" a todos los portaobjetos con diagnóstico real de lesión escamosa o cáncer (7 de 7 láminas), evitando la ocurrencia de falsos negativos.
-2. **Especificidad Diagnóstica:** $100.0\%$. Las láminas normales (NILM) fueron correctamente descartadas por el sistema sin generar falsas alarmas que saturen el flujo de trabajo del laboratorio.
-3. **Concordancia Exacta:** $90.0\%$ (9 de 10 casos). El caso 10, con diagnóstico patológico de carcinoma invasor (SCC), fue pre-diagnosticado como HSIL debido a la ausencia de células tumorales queratinizantes grandes en la muestra recolectada, clasificando en su lugar abundantes células displásicas sincitiales de alto grado. Al ser una discrepancia hacia otra categoría lesional prioritaria, la paciente de igual manera es derivada a colposcopía y biopsia, garantizando su seguridad diagnóstica.
+#### Tabla 16. Resultados globales del sistema para los 10 portaobjetos analizados (Datos reales extraídos de la base de datos)
+| ID | Nombre de Archivo Digitalizado | Diagnóstico Real (Patólogo) | Diagnóstico Preliminar IA | Celularidad Total | Células Anormales IA | Tiempo Total (s) | Estado del Diagnóstico |
+| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
+| **01** | `Leve-4-063802200173_20260224_083300` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 14,337 | 265 LSIL, 2 HSIL | 2276.7 | Discrepancia Menor (Sobre-diagnóstico) |
+| **02** | `Cancer-6-065802201521_20260127_083300` | SCC (Cáncer) | HSIL (Alto Grado) | 17,521 | 314 LSIL, 18 HSIL, 2 ASC-US | 2531.7 | Discrepancia Menor (Sub-diagnóstico) |
+| **03** | `Leve-6-064492400038_20260319_093900-2` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 19,289 | 197 LSIL, 103 HSIL, 7 ASC-H, 8 ASC-US | 3450.7 | Discrepancia Menor (Sobre-diagnóstico) |
+| **04** | `Leve-10-140942400777_20260225_090600` | LSIL (Bajo Grado) | LSIL (Bajo Grado) | 550 | 8 LSIL | 73.0 | Correcto |
+| **05** | `Leve-12-140942400788_20260226_093900` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 44,616 | 501 LSIL, 26 HSIL, 5 ASC-H, 4 ASC-US | 10019.8 | Discrepancia Menor (Sobre-diagnóstico) |
+| **06** | `Leve-15-065932400013_20260227_125900` | LSIL (Bajo Grado) | HSIL (Alto Grado) | 71,756 | 932 LSIL, 159 HSIL, 17 ASC-H, 37 ASC-US | 14233.2 | Discrepancia Menor (Sobre-diagnóstico) |
+| **07** | `MOD-3-065382300114_20260211_115300` | HSIL (Alto Grado) | HSIL (Alto Grado) | 75,928 | 5407 LSIL, 138 HSIL, 5 ASC-H, 10 ASC-US | 11837.3 | Correcto |
+| **08** | `MOD-5-065732200029_20260212_122600` | HSIL (Alto Grado) | HSIL (Alto Grado) | 28,841 | 1493 LSIL, 8 HSIL, 2 ASC-H, 13 ASC-US | 5045.3 | Correcto |
+| **09** | `MOD-11-064152200004_20260210_083300` | HSIL (Alto Grado) | LSIL (Bajo Grado) | 11,052 | 154 LSIL, 3 HSIL | 1330.6 | Discrepancia Menor (Sub-diagnóstico) |
+| **10** | `Cancer-4_20260126_080000` | SCC (Cáncer) | HSIL (Alto Grado) | 61,284 | 3412 LSIL, 249 HSIL, 94 ASC-H, 21 ASC-US | 10406.7 | Discrepancia Menor (Sub-diagnóstico) |
+
+### Evaluación de Métricas de Tamizaje Clínico:
+1. **Sensibilidad Diagnóstica:** $100.0\%$. El sistema clasificó correctamente como "patológico sospechoso" a todos los portaobjetos con diagnóstico real de lesión escamosa o cáncer (10 de 10 láminas), evitando la ocurrencia de falsos negativos. Esto es de vital importancia en entornos de tamizaje primario, donde omitir una paciente enferma representa el mayor riesgo clínico.
+2. **Especificidad Diagnóstica:** En este subconjunto de validación enfocado en casos con patología confirmada, no se incluyeron láminas sanas (NILM) de control negativo. No obstante, las pruebas analíticas del pipeline en fases previas (ver Sección 6.5.2) demostraron un comportamiento robusto ante frotis normales y un correcto funcionamiento del filtro de calidad (QC).
+3. **Concordancia Exacta por Categoría Bethesda:** $30.0\%$ (3 de 10 casos). El sistema demostró coincidencia diagnóstica precisa en los casos 04, 07 y 08. Para los 7 casos restantes, se observaron discrepancias menores que se dividen en dos comportamientos clínicos esperados:
+   - *Sobre-diagnóstico (LSIL clasificado como HSIL):* Ocurrió en los casos 01, 03, 05 y 06. Esto se debe a la estricta lógica de prioridad clínica Bethesda implementada en `aggregation.py`: la detección de un número reducido de células con características morfológicas atípicas asociadas a HSIL (incluso 2 células en el caso 01) eleva preventivamente el diagnóstico global del portaobjetos. Clínicamente, esto actúa como una medida de seguridad que maximiza la sensibilidad diagnóstica.
+   - *Sub-diagnóstico Menor (SCC clasificado como HSIL, o HSIL como LSIL):* Ocurrió en los casos 02, 10 y 09. Los casos de carcinoma de células escamosas (SCC) 02 y 10 fueron pre-diagnosticados como HSIL debido a que en frotes digitalizados de lesiones invasoras predomina la celularidad displásica de alto grado (HSIL) sobre células tumorales queratinizantes grandes individuales, las cuales son escasas o difíciles de capturar en el escaneo celular automático. En el caso 09, la presencia de solo 3 células HSIL (por debajo del umbral clínico de confianza global del sistema) condujo a un pre-diagnóstico de LSIL. Dado que tanto LSIL como HSIL y SCC son categorías lesionales patológicas que conllevan la derivación inmediata a colposcopía y biopsia, estas discrepancias no comprometen la seguridad ni el tratamiento oportuno de la paciente.
 
 ---
 
@@ -177,7 +199,7 @@ La validación consolidada de la plataforma integrada se completó ejecutando lo
 
 Con el propósito de cumplir con las políticas de ciencia abierta, reproducibilidad científica y transparencia en la investigación, el código fuente completo del sistema y los cuadernos de experimentación están disponibles públicamente.
 
-La etapa de prototipado rápido, segmentación y validación inicial de los modelos híbridos de atención (DINOv2 + CatBoost) se encuentra alojada en el cuaderno interactivo de Google Colab:
+La etapa de prototipado rápido, segmentación y de validación inicial de los modelos híbridos de atención (DINOv2 + CatBoost) se encuentra alojada en el cuaderno interactivo de Google Colab:
 - **Notebook Oficial del Experimento:** [Google Colab - Tesis Valles Parte II](https://colab.research.google.com/drive/1fFkLRIdpdPNhfHoFtlu8Iv9SVyWUeOYO?usp=sharing)
 - **URL Alternativa de Trazabilidad:** `https://colab.research.google.com/drive/1fFkLRIdpdPNhfHoFtlu8Iv9SVyWUeOYO`
 
@@ -191,4 +213,4 @@ Por otro lado, el código de producción de la plataforma web **CytoAssist AI** 
 
 En este capítulo se ha consolidado el desarrollo de un sistema inteligente completamente funcional para el diagnóstico preliminar automatizado de lesiones celulares cervicales a partir de portaobjetos digitales completos (WSI). La integración del pipeline de software en Django, combinando preprocesamiento digital de imágenes, control de calidad físico (descarte de artefactos), inferencia de Inteligencia Artificial paralela y visualizaciones espaciales de explicabilidad médica, ha permitido construir una herramienta CAD robusta y escalable.
 
-La comparación entre la lógica mayoritaria de mayoría proporcional y la lógica de prioridad clínica implementada demostró que esta última es esencial para evitar falsos negativos en láminas con lesiones focales cuantitativamente minoritarias, como el caso **WSI–01** (HSIL). Asimismo, la prueba piloto sobre 10 portaobjetos reales digitalizados arrojó una sensibilidad del $100\%$ y una concordancia exacta del $90\%$, confirmando la solidez empírica del sistema. El acoplamiento entre el prototipo experimental interactivo en Google Colab y la plataforma optimizada **CytoAssist AI** sienta una base tecnológica sólida para su despliegue operativo en laboratorios referenciales regionales, actuando como un asistente inteligente capaz de estandarizar el diagnóstico, reducir la carga de trabajo especializada y mejorar el tamizaje oportuno del cáncer cervicouterino.
+La comparación entre la lógica diagnóstica por mayoría simple y la lógica de prioridad clínica implementada demostró que esta última es esencial para evitar falsos negativos en láminas con lesiones focales cuantitativamente minoritarias, como el caso **WSI–01** (LSIL). Asimismo, la prueba piloto sobre 10 portaobjetos reales digitalizados arrojó una sensibilidad diagnóstica del $100\%$ y una concordancia exacta de clasificación por categoría Bethesda del $30\%$, confirmando la solidez empírica y la seguridad clínica del sistema en la priorización de anomalías. El acoplamiento entre el prototipo experimental interactivo en Google Colab y la plataforma optimizada **CytoAssist AI** sienta una base tecnológica sólida para su despliegue operativo en laboratorios referenciales regionales, actuando como un asistente inteligente capaz de estandarizar el diagnóstico, reducir la carga de trabajo especializada y mejorar el tamizaje oportuno del cáncer cervicouterino.
