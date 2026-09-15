@@ -1,0 +1,83 @@
+================================================================================
+           CYTOASSIST AI - ESPECIFICACIÓN DE COMPONENTES DE SOFTWARE
+================================================================================
+Proyecto: CytoAssist AI - Plataforma de Diagnóstico Citológico Asistido (WSI)
+Fecha:    Septiembre 2026
+Entorno:  Python 3.12 (Arquitectura x64, soporte para GPU CUDA / CPU)
+
+================================================================================
+1. TABLA CONSOLIDADA DE COMPONENTES Y VERSIONES
+================================================================================
+
+Capa / Módulo       Componente           Versión Exacta  Versión Mín.  Función en el Sistema
+--------------------------------------------------------------------------------------------------------------------------------------------
+Lenguaje Base       Python               3.12.x          >= 3.10       Intérprete y entorno de ejecución del pipeline
+Framework Web       Django               5.2.17          >= 5.0        Backend MVC, enrutamiento, ORM y transacciones atómicas
+Base de Datos       SQLite               3.x             >= 3.35       Persistencia relacional de WSI, ROIs y recuentos
+Deep Learning       PyTorch (torch)      2.9.1           >= 2.0        Extracción de embeddings con DenseNet-121 (1024 dims)
+Visión / DL         Torchvision          0.24.1          >= 0.15       Normalización tensorial y capas convolucionales
+Clasificador ML     CatBoost             1.2.10          >= 1.1        Clasificación de 6 clases Bethesda por GBDT
+Machine Learning    Scikit-Learn         1.6.1           >= 1.2        Métricas (ROC-AUC, F1), transformadores de datos
+Serialización       Joblib               1.5.2           >= 1.2        Persistencia de transformadores y pipelines
+Visión Artificial   OpenCV               4.12.0.88       >= 4.7        Segmentación HSV, Laplaciano de foco y Canny
+Lectura WSI         Tifffile             2026.6.1        >= 2023.0     Decodificación piramidal y memmap gigapíxel
+Códecs Imagen       ImageCodecs          2026.6.6        >= 2023.0     Decodificación rápida JPEG/LZW en TIFF
+Manejo Imagen       Pillow (PIL)         12.0.0          >= 9.5        Extracción de cultivos (128x128) y miniaturas
+Patología Digital   OpenSlide Python     1.4.2           >= 1.2        Interoperabilidad con formatos WSI estándar
+Cálculo Numérico    NumPy                2.2.6           >= 1.24       Matrices gigapíxel, arrays y máscaras binarias
+Estructuras Datos   Pandas               2.3.3           >= 2.0        Tablas y consolidación de candidatos celulares
+Cálculo Científico  SciPy                1.16.3          >= 1.10       Estimación KDE para mapas de calor
+Visualización       Matplotlib           3.10.6          >= 3.7        Generación de gráficos y mapas espaciales
+Cache / Colas       Redis                8.0.1           >= 5.0        Caché en memoria y mensajería en background
+
+================================================================================
+2. DESCRIPCIÓN POR CAPAS DEL SISTEMA
+================================================================================
+
+2.1. Capa Web y Persistencia:
+  - Django 5.2.17: Proporciona la estructura modular backend, autenticación,
+    ORM para consultas de datos estructurados, transacciones atómicas para
+    asegurar consistencia diagnóstica, y servidor web interactivo.
+  - SQLite 3: Base de datos relacional ligera integrada que almacena metadatos
+    de láminas WSI, coordenadas de ROIs y el inventario celular clasificado.
+
+2.2. Capa de Inteligencia Artificial (Modelos y Clasificación):
+  - Backbone DenseNet-121 (PyTorch 2.9.1): Red profunda convolucional pre-entrenada
+    y afinada con el dataset CRIC Cervix Collection, vector latente de 1024 dims.
+  - Clasificador CatBoost (v1.2.10): Modelo de árboles de gradiente (500 iteraciones,
+    depth=6, lr~0.059) para predecir las 6 categorías Bethesda:
+    1. NILM (Negativo para lesión intraepitelial o malignidad)
+    2. ASC-US (Células escamosas atípicas de significado indeterminado)
+    3. LSIL (Lesión intraepitelial escamosa de bajo grado)
+    4. ASC-H (Células escamosas atípicas, no se descarta alto grado)
+    5. HSIL (Lesión intraepitelial escamosa de alto grado)
+    6. SCC (Carcinoma de células escamosas)
+
+2.3. Capa de Visión Artificial y Procesamiento WSI:
+  - Tifffile 2026.6.1 + ImageCodecs 2026.6.6: Apertura y lectura estriada de imágenes
+    gigapíxel escaneadas por MoticEasyScan One sin saturar la RAM mediante memmap.
+  - OpenCV 4.12.0.88: Segmentación en espacio de color HSV (separación de tejido vs.
+    artefactos de tinta/burbujas) y cómputo de nitidez mediante varianza del Laplaciano.
+
+2.4. Capa Frontend e Interfaz Clínica:
+  - HTML5 & CSS3 (Vanilla Dark Mode): Interfaz médica estilizada de alto contraste.
+  - JavaScript (ES6+): Monitoreo asíncrono en tiempo real y descarga de recortes ZIP.
+
+================================================================================
+3. REQUERIMIENTOS EXACTOS (requirements.txt)
+================================================================================
+django>=5.0,<=5.2.17
+numpy==2.2.6
+pandas==2.3.3
+scipy==1.16.3
+matplotlib==3.10.6
+opencv-python==4.12.0.88
+Pillow==12.0.0
+torch==2.9.1
+torchvision==0.24.1
+catboost==1.2.10
+scikit-learn==1.6.1
+joblib==1.5.2
+tifffile==2026.6.1
+imagecodecs==2026.6.6
+redis==8.0.1
